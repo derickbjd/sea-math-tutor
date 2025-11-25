@@ -23,63 +23,61 @@ st.set_page_config(
 def load_css():
     st.markdown("""
     <style>
+
     /* Hide Streamlit branding */
     #MainMenu {visibility: hidden;}
     footer {visibility: hidden;}
     header {visibility: hidden;}
     .stDeployButton {display: none;}
 
-    /* Light app background */
-    .stApp {
-        background-color: #f5f5f5 !important;
+    /* Fix chat message bubbles */
+    .stChatMessage {
+        border-radius: 12px;
+        padding: 12px 16px !important;
+        margin-bottom: 12px !important;
     }
 
-    /* Base button styling (all main buttons) */
-    .stButton button {
-        border-radius: 14px !important;
-        font-weight: 700 !important;
-        padding: 16px 22px !important;
-        border: none !important;
-        background: linear-gradient(135deg, #667eea, #764ba2) !important;
-        color: #ffffff !important;
-        font-size: 18px !important;      /* base text size */
-        line-height: 1.3 !important;
-        display: inline-block !important;
-        transition: all 0.25s ease !important;
-        text-align: center !important;
-        white-space: pre-wrap !important;
+    /* USER bubble */
+    .stChatMessage[data-testid="chat-message-user"] {
+        background-color: #e3f2fd !important;   /* soft blue */
+        color: #0d47a1 !important;              /* dark blue text */
+        font-weight: 500;
     }
 
-    /* Make the FIRST LINE (emoji + main label) bigger */
-    .stButton button span::first-line {
-        font-size: 26px !important;      /* bigger emoji + first line */
+    /* ASSISTANT bubble */
+    .stChatMessage[data-testid="chat-message-assistant"] {
+        background-color: #f1f8e9 !important;   /* soft green */
+        color: #1b5e20 !important;              /* dark green text */
+        font-weight: 500;
     }
 
-    /* Keep buttons readable when clicked/focused (no white-on-white) */
-    .stButton button:active,
-    .stButton button:focus,
-    .stButton button:focus:not(:active) {
-        background: linear-gradient(135deg, #667eea, #764ba2) !important;
-        color: #ffffff !important;
-        outline: none !important;
-        box-shadow: 0 0 0 2px rgba(0,0,0,0.12) inset !important;
+    /* Chat input styling */
+    .stChatInputContainer {
+        background-color: #fafafa !important;
     }
 
-    /* Hover effect: slight growth + shadow */
-    .stButton button:hover {
+    /* Topic buttons */
+    .stButton > button {
+        border-radius: 12px;
+        padding: 15px;
+        font-size: 20px;
+        font-weight: bold;
+        height: 140px;
+        background: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%);
+        color: white;
+        border: none;
+        transition: transform 0.2s ease;
+    }
+    .stButton > button:hover {
         transform: scale(1.03);
-        box-shadow: 0 6px 18px rgba(0, 0, 0, 0.18);
-        cursor: pointer;
-        opacity: 0.98;
+    }
+    .stButton > button:active {
+        transform: scale(0.97);
     }
 
-    /* Make the topic buttons tall and card-like */
-    div[data-testid="column"] > div > div > button {
-        height: 120px !important;
-        white-space: pre-wrap !important;
-    }
     </style>
     """, unsafe_allow_html=True)
+
 
 load_css()
 
