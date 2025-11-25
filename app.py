@@ -41,13 +41,18 @@ def load_css():
         color: #111827 !important;   /* dark grey text */
     }
 
-    /* User vs assistant bubbles for a bit of fun */
-    .stChatMessage[data-testid="stChatMessageUser"] {
+    /* Hide Streamlit's "user" / "assistant" chat labels */
+    [data-testid="stChatMessage"] > div:first-child {
+        display: none !important;
+    }
+
+    /* User vs assistant bubbles */
+    [data-testid="stChatMessageUser"] {
         background-color: #e0f2fe !important;  /* light blue */
         border-radius: 14px;
         padding: 0.75rem 1rem;
     }
-    .stChatMessage[data-testid="stChatMessageAssistant"] {
+    [data-testid="stChatMessageAssistant"] {
         background-color: #ffffff !important;
         border-radius: 14px;
         padding: 0.75rem 1rem;
@@ -76,13 +81,13 @@ def load_css():
         box-shadow: 0 6px 14px rgba(79, 70, 229, 0.35);
     }
 
-    /* Active / focused state – CRITICAL: keep text visible */
+    /* Active / focused state – keep text visible */
     .stButton > button:active,
     .stButton > button:focus {
         outline: none !important;
         border: none !important;
         background: linear-gradient(135deg, #4338ca, #4f46e5);  /* slightly darker */
-        color: #ffffff !important;  /* stay white text */
+        color: #ffffff !important;
         box-shadow: 0 2px 6px rgba(15, 23, 42, 0.35);
         transform: translateY(0);
     }
@@ -99,38 +104,9 @@ def load_css():
         min-height: 120px;
         white-space: pre-wrap;
     }
-
-    /* You can optionally give different colours to different buttons
-       later by targeting their specific keys with data-testid if needed. */
-       def load_css():
-    st.markdown("""
-    <style>
-    /* Hide Streamlit branding */
-    #MainMenu {visibility: hidden;}
-    footer {visibility: hidden;}
-    header {visibility: hidden;}
-    .stDeployButton {display: none;}
-
-    /* Custom button styling */
-    .stButton button {
-        border-radius: 10px;
-        font-weight: bold;
-        transition: all 0.3s ease;
-    }
-
-    /* Topic cards */
-    div[data-testid="column"] > div > div > button {
-        height: 120px;
-        white-space: pre-wrap;
-    }
-
-    /* Hide Streamlit's "user" / "assistant" chat labels */
-    [data-testid="stChatMessage"] > div:first-child {
-        display: none !important;
-    }
     </style>
     """, unsafe_allow_html=True)
-   
+
 load_css()
 
 # ============================================
