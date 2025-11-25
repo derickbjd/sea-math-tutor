@@ -514,23 +514,31 @@ def show_practice_screen():
                     # Parse AI response to detect correct/incorrect
                     response_lower = response_text.lower()
                     
-                    # Check if this is feedback on an answer
-                    is_feedback = any(word in response_lower for word in [
-                        'correct', 'yes!', 'excellent', 'great job', 'well done',
-                        'wrong', 'incorrect', 'not quite', 'try again', 'almost'
-                    ])
+                    # Check if this is feedback on an answer (not just a question)
+                    is_question = 'what is' in response_lower or 'calculate' in response_lower or 'find' in response_lower or 'how many' in response_lower
+                    
+                    # Look for explicit correct/incorrect markers
+                    correct_markers = ['✅', '✓', 'correct!', 'yes!', 'excellent!', 'great job!', 
+                                     'well done!', 'perfect!', 'right!', 'exactly!', 'spot on!',
+                                     'you got it']
+                    incorrect_markers = ['❌', '✗', 'not quite', 'incorrect', "that's not right",
+                                       'try again', 'not correct', 'wrong', 'almost']
+                    
+                    has_correct_marker = any(marker in response_lower for marker in correct_markers)
+                    has_incorrect_marker = any(marker in response_lower for marker in incorrect_markers)
+                    
+                    # This is feedback if it has markers and isn't asking a question
+                    is_feedback = (has_correct_marker or has_incorrect_marker) and not is_question
                     
                     if is_feedback:
-                        # Determine if correct
-                        is_correct = any(word in response_lower for word in [
-                            'correct', 'yes!', '✓', '✅', 'excellent', 'great job',
-                            'well done', 'perfect', 'right', 'exactly'
-                        ])
-                        
                         # Update stats
                         st.session_state.questions_answered += 1
-                        if is_correct:
+                        
+                        if has_correct_marker:
                             st.session_state.correct_answers += 1
+                            is_correct = True
+                        else:
+                            is_correct = False
                         
                         # Log activity
                         try:
