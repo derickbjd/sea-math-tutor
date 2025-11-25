@@ -117,6 +117,7 @@ def class_overview():
     st.header("📊 Class Overview")
     
     students_df = load_student_data()
+    activity_df = load_activity_log()
     
     if students_df.empty:
         st.warning("No student data yet. Students will appear here once they start practicing!")
@@ -141,6 +142,111 @@ def class_overview():
         students_df['Accuracy_Num'] = students_df['Accuracy'].str.rstrip('%').astype(float)
         avg_accuracy = students_df['Accuracy_Num'].mean()
         st.metric("Class Avg Accuracy", f"{avg_accuracy:.1f}%")
+    
+    st.write("---")
+    
+    # CLASS-WIDE INSIGHTS
+    if not activity_df.empty:
+        st.subheader("🎯 Class Performance Insights")
+        
+        # Calculate class performance by strand
+        strand_class_performance = activity_df.groupby('Strand').agg({
+            'Correct': lambda x: (x == 'Yes').sum(),
+            'Student_ID': 'count'
+        }).reset_index()
+        strand_class_performance.columns = ['Strand', 'Correct', 'Total']
+        strand_class_performance['Accuracy'] = (
+            strand_class_performance['Correct'] / strand_class_performance['Total'] * 100
+        ).round(1)
+        strand_class_performance = strand_class_performance.sort_values('Accuracy', ascending=True)
+        
+        col1, col2, col3 = st.columns(3)
+        
+        with col1:
+            st.markdown("### 🚨 **Class Needs Help With:**")
+            weak_topics = strand_class_performance[strand_class_performance['Accuracy'] < 70]
+            if not weak_topics.empty:
+                for _, topic in weak_topics.iterrows():
+                    st.error(f"**{topic['Strand']}**: {topic['Accuracy']:.0f}% class average")
+                st.info("💡 Consider whole-class review sessions on these topics!")
+            else:
+                st.success("Class is doing well in all areas! 🎉")
+        
+        with col2:
+            st.markdown("### 📚 **Class Doing OK:**")
+            ok_topics = strand_class_performance[
+                (strand_class_performance['Accuracy'] >= 70) & 
+                (strand_class_performance['Accuracy'] < 80)
+            ]
+            if not ok_topics.empty:
+                for _, topic in ok_topics.iterrows():
+                    st.warning(f"**{topic['Strand']}**: {topic['Accuracy']:.0f}% class average")
+                st.info("💡 Small group practice could help!")
+            else:
+                st.info("No topics in this range")
+        
+        with col3:
+            st.markdown("### ✅ **Class Strengths:**")
+            strong_topics = strand_class_performance[strand_class_performance['Accuracy'] >= 80]
+            if not strong_topics.empty:
+                for _, topic in strong_topics.iterrows():
+                    st.success(f"**{topic['Strand']}**: {topic['Accuracy']:.0f}% class average")
+                st.info("💡 Great! Use these to build confidence!")
+            else:
+                st.info("Keep working to build strengths!")
+        
+        st.write("---")
+        
+        # Visual performance chart
+        st.subheader("📊 Class Performance by Strand")
+        
+        fig = px.bar(
+            strand_class_performance.sort_values('Accuracy', ascending=False),
+            x='Strand',
+            y='Accuracy',
+            title='Class Average Accuracy by Topic',
+            color='Accuracy',
+            color_continuous_scale='RdYlGn',
+            range_color=[0, 100],
+            text='Accuracy'
+        )
+        fig.update_traces(texttemplate='%{text:.1f}%', textposition='outside')
+        fig.add_hline(y=75, line_dash="dash", line_color="orange", 
+                     annotation_text="Target: 75%")
+        st.plotly_chart(fig, use_container_width=True)
+        
+        st.write("---")
+    
+    # STUDENTS WHO NEED ATTENTION
+    st.subheader("⚠️ Students Needing Extra Support")
+    
+    struggling_students = students_df[students_df['Accuracy_Num'] < 70].sort_values('Accuracy_Num')
+    
+    if not struggling_students.empty:
+        for _, student in struggling_students.iterrows():
+            with st.expander(f"🆘 {student['Name']} - {student['Accuracy']} accuracy"):
+                col1, col2 = st.columns(2)
+                with col1:
+                    st.write(f"**Questions Answered:** {student['Total_Questions']}")
+                    st.write(f"**Correct:** {student['Correct']}")
+                with col2:
+                    st.write(f"**Time Spent:** {student['Time_Minutes']} minutes")
+                    st.write(f"**Last Active:** {student['Last_Active']}")
+                
+                st.warning("**💡 Action:** Schedule one-on-one session or small group help")
+    else:
+        st.success("Great! All students are doing well! 🎉")
+    
+    st.write("---")
+    
+    # TOP PERFORMERS
+    st.subheader("🌟 Top Performers")
+    
+    top_students = students_df.nlargest(5, 'Accuracy_Num')[['Name', 'Total_Questions', 'Accuracy']]
+    
+    for idx, (_, student) in enumerate(top_students.iterrows(), 1):
+        medal = "🥇" if idx == 1 else "🥈" if idx == 2 else "🥉" if idx == 3 else "⭐"
+        st.success(f"{medal} **{student['Name']}** - {student['Accuracy']} ({student['Total_Questions']} questions)")
     
     st.write("---")
     
