@@ -102,6 +102,35 @@ def load_css():
 
     /* You can optionally give different colours to different buttons
        later by targeting their specific keys with data-testid if needed. */
+       def load_css():
+    st.markdown("""
+    <style>
+    /* Hide Streamlit branding */
+    #MainMenu {visibility: hidden;}
+    footer {visibility: hidden;}
+    header {visibility: hidden;}
+    .stDeployButton {display: none;}
+
+    /* Custom button styling */
+    .stButton button {
+        border-radius: 10px;
+        font-weight: bold;
+        transition: all 0.3s ease;
+    }
+
+    /* Topic cards */
+    div[data-testid="column"] > div > div > button {
+        height: 120px;
+        white-space: pre-wrap;
+    }
+
+    /* Hide Streamlit's "user" / "assistant" chat labels */
+    [data-testid="stChatMessage"] > div:first-child {
+        display: none !important;
+    }
+    </style>
+    """, unsafe_allow_html=True)
+
     </style>
     """, unsafe_allow_html=True)
 
