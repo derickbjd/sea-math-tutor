@@ -1,10 +1,10 @@
 import streamlit as st
 import gspread
-from oauth2client.service_account import ServiceAccountCredentials
+from google.oauth2.service_account import Credentials  # UPDATED AUTH IMPORT
 import pandas as pd
 import plotly.express as px
 import plotly.graph_objects as go
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, date  # ADDED date
 
 # ============================================
 # CONFIGURATION
@@ -52,11 +52,18 @@ def check_password():
 def connect_to_sheets():
     """Connect to Google Sheets"""
     try:
-        creds_dict = st.secrets["google_sheets"]
-        scope = ['https://spreadsheets.google.com/feeds',
-                 'https://www.googleapis.com/auth/drive']
-        creds = ServiceAccountCredentials.from_json_keyfile_dict(creds_dict, scope)
+        # st.secrets["google_sheets"] must contain your service account JSON as a dict
+        creds_info = st.secrets["google_sheets"]
+
+        scopes = [
+            "https://www.googleapis.com/auth/spreadsheets",
+            "https://www.googleapis.com/auth/drive",
+        ]
+
+        creds = Credentials.from_service_account_info(creds_info, scopes=scopes)
         client = gspread.authorize(creds)
+
+        # Must match the exact name of your spreadsheet in Google Drive
         sheet = client.open("SEA_Math_Tutor_Data")
         return sheet
     except Exception as e:
@@ -130,7 +137,11 @@ def class_overview():
         st.metric("Total Students", len(students_df))
     
     with col2:
-        active_today = len(students_df[pd.to_datetime(students_df['Last_Active']).dt.date == datetime.now().date()])
+        active_today = len(
+            students_df[
+                pd.to_datetime(students_df['Last_Active']).dt.date == datetime.now().date()
+            ]
+        )
         st.metric("Active Today", active_today)
     
     with col3:
@@ -211,8 +222,12 @@ def class_overview():
             text='Accuracy'
         )
         fig.update_traces(texttemplate='%{text:.1f}%', textposition='outside')
-        fig.add_hline(y=75, line_dash="dash", line_color="orange", 
-                     annotation_text="Target: 75%")
+        fig.add_hline(
+            y=75,
+            line_dash="dash",
+            line_color="orange", 
+            annotation_text="Target: 75%"
+        )
         st.plotly_chart(fig, use_container_width=True)
         
         st.write("---")
@@ -315,14 +330,20 @@ def student_detail(student_name):
                 'Student_ID': 'count'
             }).reset_index()
             strand_performance.columns = ['Strand', 'Correct', 'Total']
-            strand_performance['Accuracy'] = (strand_performance['Correct'] / strand_performance['Total'] * 100).round(1)
+            strand_performance['Accuracy'] = (
+                strand_performance['Correct'] / strand_performance['Total'] * 100
+            ).round(1)
             
             # Create bar chart
-            fig = px.bar(strand_performance, x='Strand', y='Accuracy', 
-                        title='Accuracy by Strand (%)',
-                        color='Accuracy',
-                        color_continuous_scale='RdYlGn',
-                        range_color=[0, 100])
+            fig = px.bar(
+                strand_performance,
+                x='Strand',
+                y='Accuracy', 
+                title='Accuracy by Strand (%)',
+                color='Accuracy',
+                color_continuous_scale='RdYlGn',
+                range_color=[0, 100]
+            )
             st.plotly_chart(fig, use_container_width=True)
             
             # Display table
@@ -395,8 +416,11 @@ def analytics_page():
         
         # Count questions by strand
         strand_counts = activity_df['Strand'].value_counts()
-        fig = px.pie(values=strand_counts.values, names=strand_counts.index, 
-                     title='Questions by Strand')
+        fig = px.pie(
+            values=strand_counts.values,
+            names=strand_counts.index, 
+            title='Questions by Strand'
+        )
         st.plotly_chart(fig, use_container_width=True)
     
     with col2:
@@ -408,11 +432,15 @@ def analytics_page():
         }).reset_index()
         strand_accuracy.columns = ['Strand', 'Accuracy']
         
-        fig = px.bar(strand_accuracy, x='Strand', y='Accuracy',
-                    title='Average Accuracy by Strand (%)',
-                    color='Accuracy',
-                    color_continuous_scale='RdYlGn',
-                    range_color=[0, 100])
+        fig = px.bar(
+            strand_accuracy,
+            x='Strand',
+            y='Accuracy',
+            title='Average Accuracy by Strand (%)',
+            color='Accuracy',
+            color_continuous_scale='RdYlGn',
+            range_color=[0, 100]
+        )
         st.plotly_chart(fig, use_container_width=True)
     
     st.write("---")
@@ -430,17 +458,23 @@ def analytics_page():
     with col1:
         # Questions by hour
         hourly = activity_df['Hour'].value_counts().sort_index()
-        fig = px.bar(x=hourly.index, y=hourly.values,
-                    labels={'x': 'Hour of Day', 'y': 'Number of Questions'},
-                    title='Activity by Hour of Day')
+        fig = px.bar(
+            x=hourly.index,
+            y=hourly.values,
+            labels={'x': 'Hour of Day', 'y': 'Number of Questions'},
+            title='Activity by Hour of Day'
+        )
         st.plotly_chart(fig, use_container_width=True)
     
     with col2:
         # Questions by date
         daily = activity_df['Date'].value_counts().sort_index()
-        fig = px.line(x=daily.index, y=daily.values,
-                     labels={'x': 'Date', 'y': 'Number of Questions'},
-                     title='Activity Over Time')
+        fig = px.line(
+            x=daily.index,
+            y=daily.values,
+            labels={'x': 'Date', 'y': 'Number of Questions'},
+            title='Activity Over Time'
+        )
         st.plotly_chart(fig, use_container_width=True)
     
     st.write("---")
@@ -525,16 +559,18 @@ def usage_monitoring():
         this_week = len(activity_df[activity_df['Date'] >= week_start])
         
         # This month's usage
-        this_month = len(activity_df[activity_df['Date'].apply(
-            lambda x: x.year == today.year and x.month == today.month
-        )])
+        this_month = len(
+            activity_df['Date'].apply(
+                lambda x: x.year == today.year and x.month == today.month
+            )
+        )
         
         # Display metrics
         col1, col2, col3, col4 = st.columns(4)
         
         with col1:
             limit = 1000  # Your global daily limit
-            percentage = (today_questions / limit) * 100
+            percentage = (today_questions / limit) * 100 if limit > 0 else 0
             st.metric(
                 "Today's Usage",
                 f"{today_questions}/{limit}",
@@ -544,18 +580,20 @@ def usage_monitoring():
         
         with col2:
             weekly_limit = limit * 7
+            weekly_pct = (this_week / weekly_limit * 100) if weekly_limit > 0 else 0
             st.metric(
                 "This Week",
                 f"{this_week}/{weekly_limit}",
-                f"{(this_week/weekly_limit*100):.1f}%"
+                f"{weekly_pct:.1f}%"
             )
         
         with col3:
             monthly_limit = limit * 30
+            monthly_pct = (this_month / monthly_limit * 100) if monthly_limit > 0 else 0
             st.metric(
                 "This Month",
                 f"{this_month}/{monthly_limit}",
-                f"{(this_month/monthly_limit*100):.1f}%"
+                f"{monthly_pct:.1f}%"
             )
         
         with col4:
