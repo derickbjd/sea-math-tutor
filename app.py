@@ -130,10 +130,7 @@ def load_css():
     }
     </style>
     """, unsafe_allow_html=True)
-
-    </style>
-    """, unsafe_allow_html=True)
-
+   
 load_css()
 
 # ============================================
