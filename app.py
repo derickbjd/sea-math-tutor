@@ -23,53 +23,85 @@ st.set_page_config(
 def load_css():
     st.markdown("""
     <style>
-    /* Hide Streamlit branding */
+    /* ===== Global page styling ===== */
+    .stApp {
+        background-color: #f5f7fb;  /* soft light grey/blue */
+    }
+
+    /* Hide Streamlit chrome */
     #MainMenu {visibility: hidden;}
     footer {visibility: hidden;}
     header {visibility: hidden;}
     .stDeployButton {display: none;}
 
-    /* Page background */
-    .stApp {
-        background-color: #f5f7fb;
+    /* ===== Chat text visibility (fix white-on-white) ===== */
+    .stChatMessage .stMarkdown p,
+    .stChatMessage .stMarkdown li,
+    .stChatMessage .stMarkdown span {
+        color: #111827 !important;   /* dark grey text */
     }
 
-    /* Custom button styling */
-    .stButton button {
-        border-radius: 12px;
+    /* User vs assistant bubbles for a bit of fun */
+    .stChatMessage[data-testid="stChatMessageUser"] {
+        background-color: #e0f2fe !important;  /* light blue */
+        border-radius: 14px;
+        padding: 0.75rem 1rem;
+    }
+    .stChatMessage[data-testid="stChatMessageAssistant"] {
+        background-color: #ffffff !important;
+        border-radius: 14px;
+        padding: 0.75rem 1rem;
+    }
+
+    /* ===== Buttons – colourful, readable, kid-friendly ===== */
+
+    /* Base style for ALL buttons */
+    .stButton > button {
+        border-radius: 14px;
         font-weight: 700;
-        padding: 1rem 1.2rem;
-        font-size: 1rem;
         border: none;
-        background: linear-gradient(135deg, #4f46e5, #06b6d4);
-        color: white;
-        box-shadow: 0 4px 10px rgba(0,0,0,0.15);
-        transition: all 0.2s ease-in-out;
+        padding: 0.85rem 1.1rem;
+        font-size: 1.05rem;
+        color: #ffffff !important;
+        background: linear-gradient(135deg, #4f46e5, #6366f1);  /* indigo gradient */
+        box-shadow: 0 4px 10px rgba(79, 70, 229, 0.25);
+        transition: transform 0.1s ease, box-shadow 0.1s ease, filter 0.1s ease;
         text-align: left;
-        line-height: 1.3;
-        white-space: pre-wrap;
     }
 
-    .stButton button:hover {
+    /* Hover state */
+    .stButton > button:hover {
         filter: brightness(1.05);
         transform: translateY(-1px);
-        box-shadow: 0 6px 14px rgba(0,0,0,0.18);
+        box-shadow: 0 6px 14px rgba(79, 70, 229, 0.35);
     }
 
-    /* Keep text visible when focused/active */
-    .stButton button:focus,
-    .stButton button:active {
-        outline: 2px solid #0ea5e9;
-        outline-offset: 2px;
-        color: white !important;
-        background: linear-gradient(135deg, #0f766e, #2563eb);
+    /* Active / focused state – CRITICAL: keep text visible */
+    .stButton > button:active,
+    .stButton > button:focus {
+        outline: none !important;
+        border: none !important;
+        background: linear-gradient(135deg, #4338ca, #4f46e5);  /* slightly darker */
+        color: #ffffff !important;  /* stay white text */
+        box-shadow: 0 2px 6px rgba(15, 23, 42, 0.35);
+        transform: translateY(0);
     }
 
-    /* Topic cards - height tweak */
+    /* Make emojis/icons feel bigger & fun for 11-year-olds */
+    .stButton > button p,
+    .stButton > button span {
+        font-size: 1.15rem;
+        line-height: 1.3;
+    }
+
+    /* Topic buttons inside columns – give them more height like cards */
     div[data-testid="column"] > div > div > button {
         min-height: 120px;
         white-space: pre-wrap;
     }
+
+    /* You can optionally give different colours to different buttons
+       later by targeting their specific keys with data-testid if needed. */
     </style>
     """, unsafe_allow_html=True)
 
