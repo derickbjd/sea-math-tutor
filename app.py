@@ -28,17 +28,59 @@ def load_css():
     footer {visibility: hidden;}
     header {visibility: hidden;}
     .stDeployButton {display: none;}
-    
-    /* Custom button styling */
-    .stButton button {
-        border-radius: 10px;
-        font-weight: bold;
-        transition: all 0.3s ease;
+
+    /* Page background (white with soft grey) */
+    .stApp {
+        background: #f7f7f7 !important;
     }
-    
-    /* Topic cards */
+
+    /* General button styling */
+    .stButton button {
+        border-radius: 12px;
+        font-weight: bold;
+        padding: 14px 20px;
+        border: none;
+        color: white;
+        transition: all 0.25s ease;
+        font-size: 17px;
+    }
+
+    /* Dashboard Topic Buttons */
+    /* Number */
+    button[kind="primary"][data-baseweb="button"]:contains("Number") {
+        background: linear-gradient(135deg, #ff9f1c, #ff7400);
+    }
+    /* Measurement */
+    button[kind="primary"][data-baseweb="button"]:contains("Measurement") {
+        background: linear-gradient(135deg, #2ec4b6, #1ba39c);
+    }
+    /* Geometry */
+    button[kind="primary"][data-baseweb="button"]:contains("Geometry") {
+        background: linear-gradient(135deg, #667eea, #764ba2);
+    }
+    /* Statistics */
+    button[kind="primary"][data-baseweb="button"]:contains("Statistics") {
+        background: linear-gradient(135deg, #ff4b5c, #ff2e63);
+    }
+
+    /* Practice Mode Buttons */
+    button[kind="primary"][data-baseweb="button"]:contains("Mixed Practice") {
+        background: linear-gradient(135deg, #6a11cb, #2575fc);
+    }
+    button[kind="primary"][data-baseweb="button"]:contains("Full SEA Practice Test") {
+        background: linear-gradient(135deg, #1dd1a1, #10ac84);
+    }
+
+    /* Hover effect */
+    .stButton button:hover {
+        transform: scale(1.03);
+        opacity: 0.95;
+        cursor: pointer;
+    }
+
+    /* Topic grid button height */
     div[data-testid="column"] > div > div > button {
-        height: 120px;
+        height: 120px !important;
         white-space: pre-wrap;
     }
     </style>
