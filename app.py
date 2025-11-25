@@ -214,7 +214,7 @@ def configure_gemini():
     """Configure Google Gemini AI"""
     try:
         genai.configure(api_key=st.secrets["google_api_key"])
-        return genai.GenerativeModel('gemini-2.5-flash')
+        return genai.GenerativeModel('gemini-pro')
     except Exception as e:
         st.error(f"Could not configure AI: {e}")
         return None
@@ -228,6 +228,13 @@ YOUR ROLE:
 - Give ONE question at a time
 - After they answer, tell if correct and explain
 - Teach shortcuts and hacks
+
+CRITICAL - ANSWER FEEDBACK FORMAT:
+When student answers, you MUST start your response with one of these:
+- If CORRECT: Start with "✅ Correct!" or "🎉 Yes!" or "✓ Right!" or "Excellent!"
+- If WRONG: Start with "❌ Not quite" or "That's not correct" or "Try again"
+
+This is VERY IMPORTANT for tracking their progress!
 
 QUESTION TYPES:
 NUMBER: Whole numbers, fractions, decimals, percentages, patterns
@@ -249,16 +256,18 @@ HACKS TO TEACH:
 - Perimeter rectangle: (L + W) × 2
 
 FORMAT:
-1. Start: Give first question
-2. After answer: Say correct/wrong, explain, teach hack
-3. If wrong: Show method, give similar question
-4. Keep responses short (2-3 paragraphs)
-5. Use emojis!
+1. If they say "start" or "next": Give a question, then say "This is a [strand] question"
+2. If they give an answer: 
+   - FIRST LINE: ✅ Correct! OR ❌ Not quite
+   - Then explain why
+   - Then teach a hack
+   - Then ask if they want another
+3. Keep responses short (2-3 paragraphs)
+4. Use emojis!
 
-IMPORTANT:
-- ONE question at a time
-- After giving question say: "This is a [Number/Measurement/Geometry/Statistics] question"
-- Make it fun, not scary!
+EXAMPLE GOOD RESPONSES:
+"✅ Correct! You got it, Marcus! The answer is 46m. Here's why: The perimeter..."
+"❌ Not quite, but good try! The answer is actually 46m, not 23m. Here's what happened..."
 
 You're helping them become champions! 🏆"""
 
@@ -502,19 +511,39 @@ def show_practice_screen():
                         "content": response_text
                     })
                     
-                    # Log activity (simplified)
-                    try:
-                        log_student_activity(
-                            st.session_state.student_id,
-                            st.session_state.student_name,
-                            "AI Question",
-                            st.session_state.current_topic,
-                            True,
-                            30
-                        )
+                    # Parse AI response to detect correct/incorrect
+                    response_lower = response_text.lower()
+                    
+                    # Check if this is feedback on an answer
+                    is_feedback = any(word in response_lower for word in [
+                        'correct', 'yes!', 'excellent', 'great job', 'well done',
+                        'wrong', 'incorrect', 'not quite', 'try again', 'almost'
+                    ])
+                    
+                    if is_feedback:
+                        # Determine if correct
+                        is_correct = any(word in response_lower for word in [
+                            'correct', 'yes!', '✓', '✅', 'excellent', 'great job',
+                            'well done', 'perfect', 'right', 'exactly'
+                        ])
+                        
+                        # Update stats
                         st.session_state.questions_answered += 1
-                    except:
-                        pass
+                        if is_correct:
+                            st.session_state.correct_answers += 1
+                        
+                        # Log activity
+                        try:
+                            log_student_activity(
+                                st.session_state.student_id,
+                                st.session_state.student_name,
+                                "Question",
+                                st.session_state.current_topic,
+                                is_correct,
+                                30
+                            )
+                        except:
+                            pass
     
     # Initial prompt
     if len(st.session_state.conversation_history) == 0:
