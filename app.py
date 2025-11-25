@@ -265,7 +265,7 @@ def configure_gemini():
     """Configure Google Gemini AI"""
     try:
         genai.configure(api_key=st.secrets["google_api_key"])
-        return genai.GenerativeModel('gemini-1.0-pro') 
+        return genai.GenerativeModel("models/gemini-flash-latest") 
     except Exception as e:
         st.error(f"Could not configure AI: {e}")
         return None
