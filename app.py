@@ -29,59 +29,54 @@ def load_css():
     header {visibility: hidden;}
     .stDeployButton {display: none;}
 
-    /* Page background (white with soft grey) */
+    /* Light app background */
     .stApp {
-        background: #f7f7f7 !important;
+        background-color: #f5f5f5 !important;
     }
 
-    /* General button styling */
+    /* Base button styling (all main buttons) */
     .stButton button {
-        border-radius: 12px;
-        font-weight: bold;
-        padding: 14px 20px;
-        border: none;
-        color: white;
-        transition: all 0.25s ease;
-        font-size: 17px;
+        border-radius: 14px !important;
+        font-weight: 700 !important;
+        padding: 16px 22px !important;
+        border: none !important;
+        background: linear-gradient(135deg, #667eea, #764ba2) !important;
+        color: #ffffff !important;
+        font-size: 18px !important;      /* base text size */
+        line-height: 1.3 !important;
+        display: inline-block !important;
+        transition: all 0.25s ease !important;
+        text-align: center !important;
+        white-space: pre-wrap !important;
     }
 
-    /* Dashboard Topic Buttons */
-    /* Number */
-    button[kind="primary"][data-baseweb="button"]:contains("Number") {
-        background: linear-gradient(135deg, #ff9f1c, #ff7400);
-    }
-    /* Measurement */
-    button[kind="primary"][data-baseweb="button"]:contains("Measurement") {
-        background: linear-gradient(135deg, #2ec4b6, #1ba39c);
-    }
-    /* Geometry */
-    button[kind="primary"][data-baseweb="button"]:contains("Geometry") {
-        background: linear-gradient(135deg, #667eea, #764ba2);
-    }
-    /* Statistics */
-    button[kind="primary"][data-baseweb="button"]:contains("Statistics") {
-        background: linear-gradient(135deg, #ff4b5c, #ff2e63);
+    /* Make the FIRST LINE (emoji + main label) bigger */
+    .stButton button span::first-line {
+        font-size: 26px !important;      /* bigger emoji + first line */
     }
 
-    /* Practice Mode Buttons */
-    button[kind="primary"][data-baseweb="button"]:contains("Mixed Practice") {
-        background: linear-gradient(135deg, #6a11cb, #2575fc);
-    }
-    button[kind="primary"][data-baseweb="button"]:contains("Full SEA Practice Test") {
-        background: linear-gradient(135deg, #1dd1a1, #10ac84);
+    /* Keep buttons readable when clicked/focused (no white-on-white) */
+    .stButton button:active,
+    .stButton button:focus,
+    .stButton button:focus:not(:active) {
+        background: linear-gradient(135deg, #667eea, #764ba2) !important;
+        color: #ffffff !important;
+        outline: none !important;
+        box-shadow: 0 0 0 2px rgba(0,0,0,0.12) inset !important;
     }
 
-    /* Hover effect */
+    /* Hover effect: slight growth + shadow */
     .stButton button:hover {
         transform: scale(1.03);
-        opacity: 0.95;
+        box-shadow: 0 6px 18px rgba(0, 0, 0, 0.18);
         cursor: pointer;
+        opacity: 0.98;
     }
 
-    /* Topic grid button height */
+    /* Make the topic buttons tall and card-like */
     div[data-testid="column"] > div > div > button {
         height: 120px !important;
-        white-space: pre-wrap;
+        white-space: pre-wrap !important;
     }
     </style>
     """, unsafe_allow_html=True)
