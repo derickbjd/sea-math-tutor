@@ -2,7 +2,7 @@ import streamlit as st
 import google.generativeai as genai
 from datetime import datetime, date, timedelta
 import gspread
-from oauth2client.service_account import ServiceAccountCredentials
+from google.oauth2.service_account import Credentials  # UPDATED AUTH IMPORT
 import time
 
 # ============================================
@@ -84,13 +84,20 @@ if 'badge_progress' not in st.session_state:
 # ============================================
 
 def connect_to_sheets():
-    """Connect to Google Sheets for data logging"""
+    """Connect to Google Sheets for data logging using service account from Streamlit secrets"""
     try:
-        creds_dict = st.secrets["google_sheets"]
-        scope = ['https://spreadsheets.google.com/feeds',
-                 'https://www.googleapis.com/auth/drive']
-        creds = ServiceAccountCredentials.from_json_keyfile_dict(creds_dict, scope)
+        # st.secrets["google_sheets"] must contain your service account JSON as a dict
+        creds_info = st.secrets["google_sheets"]
+
+        scopes = [
+            "https://www.googleapis.com/auth/spreadsheets",
+            "https://www.googleapis.com/auth/drive",
+        ]
+
+        creds = Credentials.from_service_account_info(creds_info, scopes=scopes)
         client = gspread.authorize(creds)
+
+        # This must match the exact name of your spreadsheet in Google Drive
         sheet = client.open("SEA_Math_Tutor_Data")
         return sheet
     except Exception as e:
@@ -113,7 +120,7 @@ def log_student_activity(student_id, student_name, question_type, strand, correc
             # Increment usage
             if 'daily_usage' in st.session_state:
                 st.session_state.daily_usage['count'] += 1
-    except Exception as e:
+    except Exception:
         pass  # Silent fail
 
 def update_student_summary(student_id, student_name):
@@ -127,13 +134,18 @@ def update_student_summary(student_id, student_name):
                 row_num = cell.row
                 students_sheet.update_cell(row_num, 4, st.session_state.questions_answered)
                 students_sheet.update_cell(row_num, 5, st.session_state.correct_answers)
-                accuracy = round((st.session_state.correct_answers / st.session_state.questions_answered * 100), 1) if st.session_state.questions_answered > 0 else 0
+                accuracy = round(
+                    (st.session_state.correct_answers / st.session_state.questions_answered * 100),
+                    1
+                ) if st.session_state.questions_answered > 0 else 0
                 students_sheet.update_cell(row_num, 6, f"{accuracy}%")
-                time_minutes = round((datetime.now() - st.session_state.session_start).seconds / 60)
+                time_minutes = round(
+                    (datetime.now() - st.session_state.session_start).seconds / 60
+                )
                 current_time = int(students_sheet.cell(row_num, 7).value or 0)
                 students_sheet.update_cell(row_num, 7, current_time + time_minutes)
                 students_sheet.update_cell(row_num, 8, datetime.now().strftime("%Y-%m-%d %H:%M"))
-            except:
+            except Exception:
                 students_sheet.append_row([
                     student_id, student_name,
                     datetime.now().strftime("%Y-%m-%d"),
@@ -143,7 +155,7 @@ def update_student_summary(student_id, student_name):
                     round((datetime.now() - st.session_state.session_start).seconds / 60) if st.session_state.session_start else 0,
                     datetime.now().strftime("%Y-%m-%d %H:%M")
                 ])
-    except:
+    except Exception:
         pass
 
 # ============================================
@@ -160,8 +172,10 @@ def check_global_limit():
             activity_sheet = sheet.worksheet("Activity_Log")
             today = date.today().isoformat()
             all_records = activity_sheet.get_all_records()
-            today_count = sum(1 for record in all_records 
-                            if str(record.get('Timestamp', '')).startswith(today))
+            today_count = sum(
+                1 for record in all_records 
+                if str(record.get('Timestamp', '')).startswith(today)
+            )
             
             if today_count >= GLOBAL_DAILY_LIMIT:
                 st.error("🚨 Daily Capacity Reached")
@@ -173,7 +187,7 @@ def check_global_limit():
                 Thank you for understanding! 🙏
                 """)
                 st.stop()
-    except:
+    except Exception:
         pass
 
 def check_daily_limit():
@@ -185,7 +199,7 @@ def check_daily_limit():
         st.session_state.daily_usage = {'date': today, 'count': 0}
     
     if st.session_state.daily_usage['count'] >= DAILY_LIMIT:
-        st.warning(f"🎯 Daily Practice Goal Reached!")
+        st.warning("🎯 Daily Practice Goal Reached!")
         st.success(f"""
         Awesome work! You've completed {DAILY_LIMIT} questions today! 🎉
         
@@ -418,7 +432,9 @@ def show_progress_modal():
         with col1:
             st.metric("Questions Today", st.session_state.questions_answered)
         with col2:
-            accuracy = round((st.session_state.correct_answers / st.session_state.questions_answered * 100)) if st.session_state.questions_answered > 0 else 0
+            accuracy = round(
+                (st.session_state.correct_answers / st.session_state.questions_answered * 100)
+            ) if st.session_state.questions_answered > 0 else 0
             st.metric("Accuracy", f"{accuracy}%")
         with col3:
             DAILY_LIMIT = int(st.secrets.get("daily_limit_per_student", 50))
@@ -466,7 +482,9 @@ def show_practice_screen():
     with col2:
         st.metric("Correct", st.session_state.correct_answers)
     with col3:
-        accuracy = round((st.session_state.correct_answers / st.session_state.questions_answered * 100)) if st.session_state.questions_answered > 0 else 0
+        accuracy = round(
+            (st.session_state.correct_answers / st.session_state.questions_answered * 100)
+        ) if st.session_state.questions_answered > 0 else 0
         st.metric("Accuracy", f"{accuracy}%")
     with col4:
         if st.session_state.session_start:
@@ -515,14 +533,23 @@ def show_practice_screen():
                     response_lower = response_text.lower()
                     
                     # Check if this is feedback on an answer (not just a question)
-                    is_question = 'what is' in response_lower or 'calculate' in response_lower or 'find' in response_lower or 'how many' in response_lower
+                    is_question = (
+                        'what is' in response_lower
+                        or 'calculate' in response_lower
+                        or 'find' in response_lower
+                        or 'how many' in response_lower
+                    )
                     
                     # Look for explicit correct/incorrect markers
-                    correct_markers = ['✅', '✓', 'correct!', 'yes!', 'excellent!', 'great job!', 
-                                     'well done!', 'perfect!', 'right!', 'exactly!', 'spot on!',
-                                     'you got it']
-                    incorrect_markers = ['❌', '✗', 'not quite', 'incorrect', "that's not right",
-                                       'try again', 'not correct', 'wrong', 'almost']
+                    correct_markers = [
+                        '✅', '✓', 'correct!', 'yes!', 'excellent!', 'great job!',
+                        'well done!', 'perfect!', 'right!', 'exactly!', 'spot on!',
+                        'you got it'
+                    ]
+                    incorrect_markers = [
+                        '❌', '✗', 'not quite', 'incorrect', "that's not right",
+                        'try again', 'not correct', 'wrong', 'almost'
+                    ]
                     
                     has_correct_marker = any(marker in response_lower for marker in correct_markers)
                     has_incorrect_marker = any(marker in response_lower for marker in incorrect_markers)
@@ -550,12 +577,15 @@ def show_practice_screen():
                                 is_correct,
                                 30
                             )
-                        except:
+                        except Exception:
                             pass
     
     # Initial prompt
     if len(st.session_state.conversation_history) == 0:
-        st.info(f"👋 Hi {st.session_state.first_name}! Type **'Start'** or **'Give me a question'** to begin!")
+        st.info(
+            f"👋 Hi {st.session_state.first_name}! "
+            f"Type **'Start'** or **'Give me a question'** to begin!"
+        )
 
 # ============================================
 # MAIN ROUTER
