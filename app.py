@@ -348,12 +348,44 @@ def get_or_create_student_id(name):
     except:
         return base
 
-def log_student_activity(sid, name, qtype, strand, correct, secs):
-    ts = datetime.now(TT_TZ).strftime("%Y-%m-%d %H:%M:%S")
-    try:
-        get_sheets_client().worksheet("Activity_Log").append_row([ts, sid, name, qtype, strand, "Yes" if correct else "No", secs])
-    except:
-        pass
+def award_badge(streak):
+    name = st.session_state.first_name.split()[0] if st.session_state.first_name else "Champion"
+    full_name = st.session_state.student_name or name
+    student_id = st.session_state.student_id
+
+    badge_name = None
+
+    if streak == 5:
+        badge_name = "BRONZE STAR"
+        st.balloons()
+        st.success(f"🎖️ **BRONZE STAR** – {name}, 5 in a row! Keep shining! ✨")
+
+    elif streak == 10:
+        badge_name = "SILVER TROPHY"
+        st.snow()
+        st.success(f"🏆 **SILVER TROPHY** – {name} hits 10 perfect! Unstoppable! 🚀")
+
+    elif streak == 15:
+        badge_name = "GOLD MEDAL"
+        st.balloons()
+        st.success(f"🥇 **GOLD MEDAL** – {name} scores 15 in a row! Champion! 🏆")
+
+    elif streak == 20:
+        badge_name = "PLATINUM CROWN"
+        st.fireworks()
+        st.success(f"👑 **PLATINUM CROWN** – {name} reaches 20! You're royalty! 👑")
+
+    elif streak == 25:
+        badge_name = "DIAMOND LEGEND"
+        st.fireworks()
+        st.balloons()
+        st.toast("💎 DIAMOND LEGEND UNLOCKED!", icon="💎")
+        st.success(f"💎 **DIAMOND LEGEND** – {name} got 25 in a row! SEA HISTORY! 🌟")
+
+    # If a badge was awarded, write it to Google Sheets
+    if badge_name:
+        log_badge_award(student_id, full_name, badge_name)
+
 
 def check_daily_limit():
     limit = int(st.secrets.get("daily_limit_per_student", 50))
