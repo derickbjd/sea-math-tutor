@@ -42,6 +42,20 @@ def load_css():
     .stApp {
         background-color: #f5f7fb;  /* soft light grey/blue */
     }
+    /* FIX: Make AI-generated tables readable */
+table, th, td {
+    color: #111827 !important;      /* dark text */
+    border-color: #9ca3af !important;  /* soft grey border */
+}
+
+thead th {
+    background-color: #e5e7eb !important;  /* light grey header */
+    color: #111827 !important;
+}
+
+tbody td {
+    background-color: #ffffff !important;  /* white cells */
+}
 
     /* Hide Streamlit chrome */
     #MainMenu {visibility: hidden;}
