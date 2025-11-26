@@ -761,46 +761,43 @@ def show_practice_screen():
         with st.chat_message("user", avatar="👤"):
             st.write(prompt)
 
-        model = configure_gemini()
-        if model:
-            with st.chat_message("assistant", avatar="🤖"):
-                with st.spinner("Thinking..."):
-                    full_prompt = SYSTEM_PROMPT + "\n\n"
-                    full_prompt += f"Student: {st.session_state.first_name}\n"
-                    full_prompt += f"Topic: {st.session_state.current_topic}\n"
-                    full_prompt += f"Questions so far this session: {st.session_state.questions_answered}\n\n"
+                           # Call Gemini safely
+                    try:
+                        response = model.generate_content(full_prompt)
+                    except Exception as e:
+                        st.error("Sorry, I'm having trouble thinking right now. Please try again.")
+                        return
 
-                    # Topic-specific constraints
-                    if st.session_state.current_topic in CORE_STRANDS:
-                        full_prompt += (
-                            f"IMPORTANT: In this conversation the topic is **{st.session_state.current_topic}**. "
-                            f"You MUST ONLY create questions from the **{st.session_state.current_topic}** strand. "
-                            "Do not mix in other strands.\n\n"
-                        )
-                    elif st.session_state.current_topic == "Mixed":
-                        full_prompt += (
-                            "IMPORTANT: This is **Mixed Practice**. Rotate questions across Number, Measurement, "
-                            "Geometry and Statistics like the real SEA exam.\n\n"
-                        )
-                    elif st.session_state.current_topic == "Full Test":
-                        full_prompt += (
-                            "IMPORTANT: This is a **40-question SEA Practice Test**. "
-                            "Treat it like an exam:\n"
-                            "- Start from Question 1 and move up by 1 each time the student answers or says 'next'.\n"
-                            "- Cover a realistic mix of Number, Measurement, Geometry, and Statistics.\n"
-                            "- Keep your feedback short but clear.\n"
-                            "- Always indicate which strand the current question belongs to.\n\n"
-                        )
-                        full_prompt += (
-                            f"Current test progress: Question {st.session_state.test_questions_answered + 1} "
-                            f"of {st.session_state.test_total_questions}.\n\n"
-                        )
+                    # SAFELY extract text from the response (avoid ValueError)
+                    response_text = ""
 
-                    for msg in st.session_state.conversation_history[-10:]:
-                        full_prompt += f"{msg['role']}: {msg['content']}\n"
+                    # 1. Try the convenience accessor, but guard it
+                    try:
+                        if hasattr(response, "text") and response.text:
+                            response_text = response.text
+                    except Exception:
+                        response_text = ""
 
-                    response = model.generate_content(full_prompt)
-                    response_text = response.text
+                    # 2. If still empty, manually gather text from candidates/parts
+                    if not response_text:
+                        try:
+                            candidates = getattr(response, "candidates", []) or []
+                            if candidates:
+                                content = getattr(candidates[0], "content", None)
+                                parts = getattr(content, "parts", []) if content else []
+                                collected = []
+                                for part in parts:
+                                    t = getattr(part, "text", None)
+                                    if t:
+                                        collected.append(t)
+                                response_text = "\n".join(collected)
+                        except Exception:
+                            response_text = ""
+
+                    # 3. If we STILL have nothing, show a friendly message and stop
+                    if not response_text.strip():
+                        st.error("Hmm… I didn't get a clear answer from the AI. Please try again.")
+                        return
 
                     st.write(response_text)
 
@@ -808,6 +805,9 @@ def show_practice_screen():
                         "role": "assistant",
                         "content": response_text
                     })
+
+                    # (then your existing correctness detection block follows)
+
 
                     # Parse AI response to detect correct/incorrect
                     # We ONLY look at the FIRST LINE of the AI's reply.
