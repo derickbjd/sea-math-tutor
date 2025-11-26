@@ -810,45 +810,53 @@ def show_practice_screen():
                     })
 
                     # Parse AI response to detect correct/incorrect
-                    response_lower = response_text.lower()
+                    # We ONLY look at the FIRST LINE of the AI's reply.
+                    lines = response_text.strip().splitlines()
+                    first_line = lines[0].strip() if lines else ""
+                    first_line_lower = first_line.lower()
 
-                    is_question = (
-                        'what is' in response_lower
-                        or 'calculate' in response_lower
-                        or 'find' in response_lower
-                        or 'how many' in response_lower
+                    # Expected intros from the system prompt
+                    correct_intros = [
+                        "✅ correct!",
+                        "🎉 yes!",
+                        "✓ right!",
+                        "excellent!",
+                        "✅",        # any "✅ ..." on first line
+                        "🎉 correct",
+                    ]
+                    incorrect_intros = [
+                        "❌ not quite",
+                        "that's not correct",
+                        "try again",
+                        "incorrect",
+                        "that's not right",
+                        "❌",        # any "❌ ..." on first line
+                    ]
+
+                    def starts_with_any(text: str, patterns: list[str]) -> bool:
+                        return any(text.startswith(p) for p in patterns)
+
+                    has_correct_marker = starts_with_any(
+                        first_line_lower,
+                        [c.lower() for c in correct_intros]
+                    )
+                    has_incorrect_marker = starts_with_any(
+                        first_line_lower,
+                        [c.lower() for c in incorrect_intros]
                     )
 
-                    correct_markers = [
-                        '✅', '✓', 'correct!', 'yes!', 'excellent!', 'great job!',
-                        'well done!', 'perfect!', 'right!', 'exactly!', 'spot on!',
-                        'you got it'
-                    ]
-                    incorrect_markers = [
-                        '❌', '✗', 'not quite', 'incorrect', "that's not right",
-                        'try again', 'not correct', 'wrong', 'almost'
-                    ]
-
-                    has_correct_marker = any(marker in response_lower for marker in correct_markers)
-                    has_incorrect_marker = any(marker in response_lower for marker in incorrect_markers)
-
-                    is_feedback = (has_correct_marker or has_incorrect_marker) and not is_question
+                    # Feedback = first line clearly starts with a correct/incorrect intro
+                    is_feedback = has_correct_marker or has_incorrect_marker
 
                     if is_feedback:
+                        # Update stats
                         st.session_state.questions_answered += 1
 
-                        is_correct = False
                         if has_correct_marker:
                             st.session_state.correct_answers += 1
                             is_correct = True
-
-                        # Award badge for strand practice (not for Mixed/Test strands label, but we still pass current_topic)
-                        if is_correct and st.session_state.current_topic in CORE_STRANDS:
-                            award_badge_if_earned(st.session_state.current_topic)
-
-                        # If in test mode, increment test counter
-                        if st.session_state.test_mode:
-                            st.session_state.test_questions_answered += 1
+                        else:
+                            is_correct = False
 
                         # Log activity
                         try:
@@ -858,7 +866,7 @@ def show_practice_screen():
                                 "Question",
                                 st.session_state.current_topic,
                                 is_correct,
-                                30
+                                30  # we'll improve this timing later
                             )
                         except Exception:
                             pass
