@@ -1,9 +1,25 @@
 import streamlit as st
 import google.generativeai as genai
 from datetime import datetime, date, timedelta
+from zoneinfo import ZoneInfo
 import gspread
 from google.oauth2.service_account import Credentials  # UPDATED AUTH IMPORT
 import time
+
+# ============================================
+# CONSTANTS
+# ============================================
+
+TT_TZ = ZoneInfo("America/Port_of_Spain")
+
+BADGE_THRESHOLDS = {
+    5: "Bronze",
+    10: "Silver",
+    15: "Gold",
+    20: "Platinum",
+}
+
+CORE_STRANDS = ["Number", "Measurement", "Geometry", "Statistics"]
 
 # ============================================
 # PAGE CONFIGURATION
@@ -41,21 +57,29 @@ def load_css():
         color: #111827 !important;   /* dark grey text */
     }
 
-    /* Hide Streamlit's "user" / "assistant" chat labels */
-    [data-testid="stChatMessage"] > div:first-child {
-        display: none !important;
-    }
-
     /* User vs assistant bubbles */
-    [data-testid="stChatMessageUser"] {
+    .stChatMessage[data-testid="stChatMessageUser"] {
         background-color: #e0f2fe !important;  /* light blue */
         border-radius: 14px;
         padding: 0.75rem 1rem;
     }
-    [data-testid="stChatMessageAssistant"] {
+    .stChatMessage[data-testid="stChatMessageAssistant"] {
         background-color: #ffffff !important;
         border-radius: 14px;
         padding: 0.75rem 1rem;
+    }
+
+    /* Hide Streamlit's "user" / "assistant" labels */
+    [data-testid="stChatMessage"] > div:first-child {
+        display: none !important;
+    }
+
+    /* ===== Metrics text darker ===== */
+    .stMetric-value {
+        color: #111827 !important;
+    }
+    .stMetric-label {
+        color: #4b5563 !important;
     }
 
     /* ===== Buttons – colourful, readable, kid-friendly ===== */
@@ -99,7 +123,7 @@ def load_css():
         line-height: 1.3;
     }
 
-    /* Topic buttons inside columns – give them more height like cards */
+    /* Topic buttons inside columns – card-like height */
     div[data-testid="column"] > div > div > button {
         min-height: 120px;
         white-space: pre-wrap;
@@ -141,6 +165,13 @@ if 'badge_progress' not in st.session_state:
         'geometry': 0,
         'statistics': 0
     }
+if 'strand_correct_counts' not in st.session_state:
+    st.session_state.strand_correct_counts = {
+        "Number": 0,
+        "Measurement": 0,
+        "Geometry": 0,
+        "Statistics": 0,
+    }
 
 # ============================================
 # GOOGLE SHEETS CONNECTION
@@ -149,7 +180,6 @@ if 'badge_progress' not in st.session_state:
 def connect_to_sheets():
     """Connect to Google Sheets for data logging using service account from Streamlit secrets"""
     try:
-        # st.secrets["google_sheets"] must contain your service account JSON as a dict
         creds_info = st.secrets["google_sheets"]
 
         scopes = [
@@ -160,7 +190,6 @@ def connect_to_sheets():
         creds = Credentials.from_service_account_info(creds_info, scopes=scopes)
         client = gspread.authorize(creds)
 
-        # This must match the exact name of your spreadsheet in Google Drive
         sheet = client.open("SEA_Math_Tutor_Data")
         return sheet
     except Exception as e:
@@ -179,26 +208,20 @@ def get_or_create_student_id(student_name: str) -> str:
     try:
         sheet = connect_to_sheets()
         if not sheet:
-            # If we cannot reach Sheets, fall back to deterministic ID
             return base_id
 
         students_sheet = sheet.worksheet("Students")
+        name_col_values = students_sheet.col_values(2)  # Column B = Student Name
 
-        # Get all names in column 2 (B) where we store Student Name
-        name_col_values = students_sheet.col_values(2)  # 1-based index
-
-        # Search for a case-insensitive match
         for row_idx, name in enumerate(name_col_values, start=1):
             if name and name.strip().lower() == student_name.strip().lower():
                 existing_id = students_sheet.cell(row_idx, 1).value  # Column A = Student_ID
                 if existing_id:
                     return existing_id
 
-        # No existing match, use deterministic new ID
         return base_id
 
     except Exception:
-        # On any error, still fall back to deterministic ID based on name
         return base_id
 
 
@@ -208,14 +231,13 @@ def log_student_activity(student_id, student_name, question_type, strand, correc
         sheet = connect_to_sheets()
         if sheet:
             activity_sheet = sheet.worksheet("Activity_Log")
-            timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+            timestamp = datetime.now(TT_TZ).strftime("%Y-%m-%d %H:%M:%S")
             activity_sheet.append_row([
                 timestamp, student_id, student_name,
                 question_type, strand,
                 "Yes" if correct else "No",
                 time_seconds
             ])
-            # Increment usage
             if 'daily_usage' in st.session_state:
                 st.session_state.daily_usage['count'] += 1
     except Exception:
@@ -228,9 +250,11 @@ def update_student_summary(student_id, student_name):
         sheet = connect_to_sheets()
         if sheet:
             students_sheet = sheet.worksheet("Students")
+            now_tt = datetime.now(TT_TZ)
             try:
                 cell = students_sheet.find(student_id)
                 row_num = cell.row
+
                 students_sheet.update_cell(row_num, 4, st.session_state.questions_answered)
                 students_sheet.update_cell(row_num, 5, st.session_state.correct_answers)
                 accuracy = round(
@@ -238,24 +262,99 @@ def update_student_summary(student_id, student_name):
                     1
                 ) if st.session_state.questions_answered > 0 else 0
                 students_sheet.update_cell(row_num, 6, f"{accuracy}%")
-                time_minutes = round(
-                    (datetime.now() - st.session_state.session_start).seconds / 60
-                )
-                current_time = int(students_sheet.cell(row_num, 7).value or 0)
+
+                time_minutes = 0
+                if st.session_state.session_start:
+                    time_minutes = round(
+                        (now_tt - st.session_state.session_start).seconds / 60
+                    )
+
+                current_time_val = students_sheet.cell(row_num, 7).value
+                current_time = int(current_time_val) if current_time_val else 0
                 students_sheet.update_cell(row_num, 7, current_time + time_minutes)
-                students_sheet.update_cell(row_num, 8, datetime.now().strftime("%Y-%m-%d %H:%M"))
+                students_sheet.update_cell(row_num, 8, now_tt.strftime("%Y-%m-%d %H:%M"))
             except Exception:
-                # If this Student_ID doesn't exist yet, append new row
+                time_minutes = 0
+                if st.session_state.session_start:
+                    time_minutes = round(
+                        (now_tt - st.session_state.session_start).seconds / 60
+                    )
+
                 students_sheet.append_row([
                     student_id, student_name,
-                    datetime.now().strftime("%Y-%m-%d"),
+                    now_tt.strftime("%Y-%m-%d"),
                     st.session_state.questions_answered,
                     st.session_state.correct_answers,
                     f"{round((st.session_state.correct_answers / st.session_state.questions_answered * 100), 1) if st.session_state.questions_answered > 0 else 0}%",
-                    round((datetime.now() - st.session_state.session_start).seconds / 60) if st.session_state.session_start else 0,
-                    datetime.now().strftime("%Y-%m-%d %H:%M")
+                    time_minutes,
+                    now_tt.strftime("%Y-%m-%d %H:%M")
                 ])
     except Exception:
+        pass
+
+# ============================================
+# BADGE LOGIC
+# ============================================
+
+def award_badge_if_earned(strand: str):
+    """
+    Check if the student just hit a badge threshold for the given strand,
+    log it to the Badges sheet if it's new, and show confetti + message.
+    Uses total correct answers per strand (not necessarily in a row).
+    """
+    if strand not in CORE_STRANDS:
+        return
+
+    # Ensure counts dict exists
+    if 'strand_correct_counts' not in st.session_state:
+        st.session_state.strand_correct_counts = {s: 0 for s in CORE_STRANDS}
+
+    # Increment count for this strand
+    st.session_state.strand_correct_counts[strand] += 1
+    count = st.session_state.strand_correct_counts[strand]
+
+    if count not in BADGE_THRESHOLDS:
+        return
+
+    badge_level = BADGE_THRESHOLDS[count]
+
+    try:
+        sheet = connect_to_sheets()
+        if not sheet:
+            return
+
+        badges_sheet = sheet.worksheet("Badges")
+        records = badges_sheet.get_all_records()
+
+        # Avoid duplicates (same student, strand, badge level)
+        for rec in records:
+            if (
+                str(rec.get("Student_ID")) == str(st.session_state.student_id)
+                and rec.get("Strand") == strand
+                and rec.get("Badge_Level") == badge_level
+            ):
+                return  # already awarded
+
+        # New badge!
+        timestamp = datetime.now(TT_TZ).strftime("%Y-%m-%d %H:%M:%S")
+        badges_sheet.append_row([
+            timestamp,
+            st.session_state.student_id,
+            st.session_state.student_name,
+            strand,
+            badge_level,
+            count,
+        ])
+
+        # Celebrate in the UI
+        st.balloons()
+        st.success(
+            f"🏅 New badge unlocked: **{strand} – {badge_level} Badge** "
+            f"for {count} correct answers!"
+        )
+
+    except Exception:
+        # If anything fails (Sheets, etc.) we don't brick the app.
         pass
 
 # ============================================
@@ -431,15 +530,13 @@ def show_dashboard():
             st.write("")
             if st.button("✅ Enter", type="primary"):
                 if first_name and last_name and class_code:
-                    # Layer 1: Check class code
                     valid_codes = st.secrets.get("class_codes", "MATH2025,SEA2025").split(",")
                     if class_code.upper() in [c.strip().upper() for c in valid_codes]:
                         full_name = f"{first_name} {last_name}"
                         st.session_state.student_name = full_name
                         st.session_state.first_name = first_name
-                        # 🔑 Stable Student ID across sessions
                         st.session_state.student_id = get_or_create_student_id(full_name)
-                        st.session_state.session_start = datetime.now()
+                        st.session_state.session_start = datetime.now(TT_TZ)
                         st.rerun()
                     else:
                         st.error("❌ Invalid class code. Please check with your teacher.")
@@ -600,7 +697,7 @@ def show_practice_screen():
         st.metric("Accuracy", f"{accuracy}%")
     with col4:
         if st.session_state.session_start:
-            elapsed = datetime.now() - st.session_state.session_start
+            elapsed = datetime.now(TT_TZ) - st.session_state.session_start
             mins = int(elapsed.total_seconds() / 60)
             st.metric("Time", f"{mins} min")
 
@@ -644,7 +741,6 @@ def show_practice_screen():
                     # Parse AI response to detect correct/incorrect
                     response_lower = response_text.lower()
 
-                    # Check if this is feedback on an answer (not just a question)
                     is_question = (
                         'what is' in response_lower
                         or 'calculate' in response_lower
@@ -652,7 +748,6 @@ def show_practice_screen():
                         or 'how many' in response_lower
                     )
 
-                    # Look for explicit correct/incorrect markers
                     correct_markers = [
                         '✅', '✓', 'correct!', 'yes!', 'excellent!', 'great job!',
                         'well done!', 'perfect!', 'right!', 'exactly!', 'spot on!',
@@ -666,18 +761,19 @@ def show_practice_screen():
                     has_correct_marker = any(marker in response_lower for marker in correct_markers)
                     has_incorrect_marker = any(marker in response_lower for marker in incorrect_markers)
 
-                    # This is feedback if it has markers and isn't asking a question
                     is_feedback = (has_correct_marker or has_incorrect_marker) and not is_question
 
                     if is_feedback:
-                        # Update stats
                         st.session_state.questions_answered += 1
 
+                        is_correct = False
                         if has_correct_marker:
                             st.session_state.correct_answers += 1
                             is_correct = True
-                        else:
-                            is_correct = False
+
+                        # Award badge if appropriate (per SEA strand)
+                        if is_correct:
+                            award_badge_if_earned(st.session_state.current_topic)
 
                         # Log activity
                         try:
