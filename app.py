@@ -1,9 +1,9 @@
 import streamlit as st
 import google.generativeai as genai
-from datetime import datetime, date, timedelta
+from datetime import datetime, date
 from zoneinfo import ZoneInfo
 import gspread
-from google.oauth2.service_account import Credentials  # UPDATED AUTH IMPORT
+from google.oauth2.service_account import Credentials
 import time
 
 # ============================================
@@ -20,6 +20,7 @@ BADGE_THRESHOLDS = {
 }
 
 CORE_STRANDS = ["Number", "Measurement", "Geometry", "Statistics"]
+FULL_TEST_QUESTION_COUNT = 40
 
 # ============================================
 # PAGE CONFIGURATION
@@ -69,17 +70,25 @@ def load_css():
         padding: 0.75rem 1rem;
     }
 
-    /* Hide Streamlit's "user" / "assistant" labels */
+    /* Hide Streamlit's "user"/"assistant" labels */
     [data-testid="stChatMessage"] > div:first-child {
         display: none !important;
     }
 
-    /* ===== Metrics text darker ===== */
+    /* ===== Metrics & progress text darker ===== */
     .stMetric-value {
         color: #111827 !important;
     }
     .stMetric-label {
         color: #4b5563 !important;
+    }
+    .stProgress .stMarkdown p,
+    .stProgress .stMarkdown span {
+        color: #111827 !important;
+    }
+    .stExpander .stMarkdown p,
+    .stExpander .stMarkdown span {
+        color: #111827 !important;
     }
 
     /* ===== Buttons – colourful, readable, kid-friendly ===== */
@@ -110,13 +119,13 @@ def load_css():
     .stButton > button:focus {
         outline: none !important;
         border: none !important;
-        background: linear-gradient(135deg, #4338ca, #4f46e5);  /* slightly darker */
+        background: linear-gradient(135deg, #4338ca, #4f46e5);
         color: #ffffff !important;
         box-shadow: 0 2px 6px rgba(15, 23, 42, 0.35);
         transform: translateY(0);
     }
 
-    /* Make emojis/icons feel bigger & fun for 11-year-olds */
+    /* Make emojis/icons bigger & fun */
     .stButton > button p,
     .stButton > button span {
         font-size: 1.15rem;
@@ -172,6 +181,14 @@ if 'strand_correct_counts' not in st.session_state:
         "Geometry": 0,
         "Statistics": 0,
     }
+if 'test_mode' not in st.session_state:
+    st.session_state.test_mode = False
+if 'test_questions_answered' not in st.session_state:
+    st.session_state.test_questions_answered = 0
+if 'test_total_questions' not in st.session_state:
+    st.session_state.test_total_questions = FULL_TEST_QUESTION_COUNT
+if 'test_start_time' not in st.session_state:
+    st.session_state.test_start_time = None
 
 # ============================================
 # GOOGLE SHEETS CONNECTION
@@ -305,11 +322,9 @@ def award_badge_if_earned(strand: str):
     if strand not in CORE_STRANDS:
         return
 
-    # Ensure counts dict exists
     if 'strand_correct_counts' not in st.session_state:
         st.session_state.strand_correct_counts = {s: 0 for s in CORE_STRANDS}
 
-    # Increment count for this strand
     st.session_state.strand_correct_counts[strand] += 1
     count = st.session_state.strand_correct_counts[strand]
 
@@ -335,7 +350,6 @@ def award_badge_if_earned(strand: str):
             ):
                 return  # already awarded
 
-        # New badge!
         timestamp = datetime.now(TT_TZ).strftime("%Y-%m-%d %H:%M:%S")
         badges_sheet.append_row([
             timestamp,
@@ -346,7 +360,6 @@ def award_badge_if_earned(strand: str):
             count,
         ])
 
-        # Celebrate in the UI
         st.balloons()
         st.success(
             f"🏅 New badge unlocked: **{strand} – {badge_level} Badge** "
@@ -354,7 +367,6 @@ def award_badge_if_earned(strand: str):
         )
 
     except Exception:
-        # If anything fails (Sheets, etc.) we don't brick the app.
         pass
 
 # ============================================
@@ -428,7 +440,6 @@ def configure_gemini():
     """Configure Google Gemini AI"""
     try:
         genai.configure(api_key=st.secrets["google_api_key"])
-        # Use one of your available models (from the list you printed)
         return genai.GenerativeModel("models/gemini-flash-latest")
     except Exception as e:
         st.error(f"Could not configure AI: {e}")
@@ -480,10 +491,6 @@ FORMAT:
    - Then ask if they want another
 3. Keep responses short (2-3 paragraphs)
 4. Use emojis!
-
-EXAMPLE GOOD RESPONSES:
-"✅ Correct! You got it, Marcus! The answer is 46m. Here's why: The perimeter..."
-"❌ Not quite, but good try! The answer is actually 46m, not 23m. Here's what happened..."
 
 You're helping them become champions! 🏆"""
 
@@ -628,6 +635,17 @@ def start_practice(topic):
     st.session_state.current_topic = topic
     st.session_state.screen = 'practice'
     st.session_state.conversation_history = []
+
+    if topic == "Full Test":
+        st.session_state.test_mode = True
+        st.session_state.test_questions_answered = 0
+        st.session_state.test_total_questions = FULL_TEST_QUESTION_COUNT
+        st.session_state.test_start_time = datetime.now(TT_TZ)
+    else:
+        st.session_state.test_mode = False
+        st.session_state.test_questions_answered = 0
+        st.session_state.test_start_time = None
+
     st.rerun()
 
 
@@ -672,7 +690,8 @@ def show_practice_screen():
             'Mixed': '🎲', 'Full Test': '📝'
         }
         icon = topic_icons.get(st.session_state.current_topic, '📚')
-        st.title(f"{icon} {st.session_state.current_topic} Practice")
+        title_suffix = " (40-Question Exam)" if st.session_state.test_mode else " Practice"
+        st.title(f"{icon} {st.session_state.current_topic}{title_suffix}")
 
     with col2:
         st.write("")
@@ -681,27 +700,54 @@ def show_practice_screen():
                 update_student_summary(st.session_state.student_id, st.session_state.student_name)
             st.session_state.screen = 'dashboard'
             st.session_state.current_topic = None
+            st.session_state.test_mode = False
             st.rerun()
 
     # Stats bar
     col1, col2, col3, col4 = st.columns(4)
 
     with col1:
-        st.metric("Questions", st.session_state.questions_answered)
+        if st.session_state.test_mode:
+            st.metric("Test Questions", f"{st.session_state.test_questions_answered} / {st.session_state.test_total_questions}")
+        else:
+            st.metric("Questions", st.session_state.questions_answered)
+
     with col2:
         st.metric("Correct", st.session_state.correct_answers)
+
     with col3:
         accuracy = round(
-            (st.session_state.correct_answers / st.session_state.questions_answered * 100)
+            (st.session_state.correct_answers / max(st.session_state.questions_answered, 1) * 100)
         ) if st.session_state.questions_answered > 0 else 0
         st.metric("Accuracy", f"{accuracy}%")
+
     with col4:
-        if st.session_state.session_start:
+        label = "Test Time" if st.session_state.test_mode else "Time"
+        if st.session_state.test_mode and st.session_state.test_start_time:
+            elapsed = datetime.now(TT_TZ) - st.session_state.test_start_time
+        elif st.session_state.session_start:
             elapsed = datetime.now(TT_TZ) - st.session_state.session_start
+        else:
+            elapsed = None
+
+        if elapsed is not None:
             mins = int(elapsed.total_seconds() / 60)
-            st.metric("Time", f"{mins} min")
+            st.metric(label, f"{mins} min")
+        else:
+            st.metric(label, "--")
 
     st.write("---")
+
+    # If full test finished, show completion and lock further input
+    if st.session_state.test_mode and st.session_state.test_questions_answered >= st.session_state.test_total_questions:
+        st.success("✅ You have completed the 40-question SEA Practice Test! Well done! 🎓")
+        if st.button("🏁 Finish Test and Return to Dashboard"):
+            update_student_summary(st.session_state.student_id, st.session_state.student_name)
+            st.session_state.screen = 'dashboard'
+            st.session_state.current_topic = None
+            st.session_state.test_mode = False
+            st.rerun()
+        return
 
     # Chat interface
     for message in st.session_state.conversation_history:
@@ -715,7 +761,6 @@ def show_practice_screen():
         with st.chat_message("user", avatar="👤"):
             st.write(prompt)
 
-        # Get AI response
         model = configure_gemini()
         if model:
             with st.chat_message("assistant", avatar="🤖"):
@@ -723,7 +768,33 @@ def show_practice_screen():
                     full_prompt = SYSTEM_PROMPT + "\n\n"
                     full_prompt += f"Student: {st.session_state.first_name}\n"
                     full_prompt += f"Topic: {st.session_state.current_topic}\n"
-                    full_prompt += f"Questions so far: {st.session_state.questions_answered}\n\n"
+                    full_prompt += f"Questions so far this session: {st.session_state.questions_answered}\n\n"
+
+                    # Topic-specific constraints
+                    if st.session_state.current_topic in CORE_STRANDS:
+                        full_prompt += (
+                            f"IMPORTANT: In this conversation the topic is **{st.session_state.current_topic}**. "
+                            f"You MUST ONLY create questions from the **{st.session_state.current_topic}** strand. "
+                            "Do not mix in other strands.\n\n"
+                        )
+                    elif st.session_state.current_topic == "Mixed":
+                        full_prompt += (
+                            "IMPORTANT: This is **Mixed Practice**. Rotate questions across Number, Measurement, "
+                            "Geometry and Statistics like the real SEA exam.\n\n"
+                        )
+                    elif st.session_state.current_topic == "Full Test":
+                        full_prompt += (
+                            "IMPORTANT: This is a **40-question SEA Practice Test**. "
+                            "Treat it like an exam:\n"
+                            "- Start from Question 1 and move up by 1 each time the student answers or says 'next'.\n"
+                            "- Cover a realistic mix of Number, Measurement, Geometry, and Statistics.\n"
+                            "- Keep your feedback short but clear.\n"
+                            "- Always indicate which strand the current question belongs to.\n\n"
+                        )
+                        full_prompt += (
+                            f"Current test progress: Question {st.session_state.test_questions_answered + 1} "
+                            f"of {st.session_state.test_total_questions}.\n\n"
+                        )
 
                     for msg in st.session_state.conversation_history[-10:]:
                         full_prompt += f"{msg['role']}: {msg['content']}\n"
@@ -771,9 +842,13 @@ def show_practice_screen():
                             st.session_state.correct_answers += 1
                             is_correct = True
 
-                        # Award badge if appropriate (per SEA strand)
-                        if is_correct:
+                        # Award badge for strand practice (not for Mixed/Test strands label, but we still pass current_topic)
+                        if is_correct and st.session_state.current_topic in CORE_STRANDS:
                             award_badge_if_earned(st.session_state.current_topic)
+
+                        # If in test mode, increment test counter
+                        if st.session_state.test_mode:
+                            st.session_state.test_questions_answered += 1
 
                         # Log activity
                         try:
@@ -790,10 +865,17 @@ def show_practice_screen():
 
     # Initial prompt
     if len(st.session_state.conversation_history) == 0:
-        st.info(
-            f"👋 Hi {st.session_state.first_name}! "
-            f"Type **'Start'** or **'Give me a question'** to begin!"
-        )
+        if st.session_state.test_mode:
+            st.info(
+                f"👋 Hi {st.session_state.first_name}! "
+                f"This is your **40-question SEA Practice Test**. "
+                f"Type **'Start'** to see Question 1."
+            )
+        else:
+            st.info(
+                f"👋 Hi {st.session_state.first_name}! "
+                f"Type **'Start'** or **'Give me a question'** to begin!"
+            )
 
 # ============================================
 # MAIN ROUTER
