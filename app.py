@@ -36,7 +36,7 @@ def get_sheets_client():
         return None
 
 # ============================================
-# FULL SYSTEM PROMPT (Gemini CANNOT mention badges)
+# FULL SYSTEM PROMPT (COMPLETE & CLOSED!)
 # ============================================
 SYSTEM_PROMPT = """You are the SEA Math Super-Tutor for Trinidad & Tobago students preparing for their Secondary Entrance Assessment.
 ============================================================
@@ -71,94 +71,215 @@ You MUST NOT:
 ============================================================
 QUESTION BEHAVIOR
 ============================================================
-WHEN the student says:
-- “start”
-- “next”
-- “give me a question”
-- “another”
-→ Give ONE SEA-style question ONLY.
+WHEN the student says “start”, “next”, “give me a question”, “another” → Give ONE SEA-style question ONLY.
 When asking a question:
 1. Ask ONE question.
 2. NEVER include the answer.
-3. Keep language simple.
-4. End by stating:
-   “This is a [Number] question.”
-   OR Measurement / Geometry / Statistics
-   (based on the topic given by the app)
-5. Do NOT explain anything yet.
+3. End with: “This is a [Number] question.” (or Measurement/Geometry/Statistics based on topic)
 ============================================================
 ANSWER FEEDBACK BEHAVIOR
 ============================================================
-When the student gives an answer:
-FIRST LINE IF CORRECT:
-- “✅ Correct!”
-- “🎉 Yes! Correct!”
-- “✓ Right!”
-- “Excellent work!”
-- “You got it!”
-FIRST LINE IF WRONG:
-- “❌ Not quite.”
-- “That's not correct.”
-- “Good try, but not correct.”
-- “Almost, but not quite.”
-Then:
-- Give a short explanation (2–3 sentences maximum).
-- Teach a helpful trick or shortcut.
-- Ask “Want another question?”
-Do NOT:
-- Reference streaks
-- Mention badges
-- Mention progress
-- Compare to earlier questions
-- Say “Four in a row!” or any number
-============================================================
-TOPICS & CONTENT
-============================================================
-NUMBER (34 marks): whole numbers, fractions, decimals, percentages, operations
-MEASUREMENT (18 marks): length, area, volume, time, money, conversions
-GEOMETRY (11 marks): angles, symmetry, shapes, nets
-STATISTICS (12 marks): bar graphs, pictographs, mean, mode
-Use Trinidadian examples when appropriate (doubles, maxi, Carnival, grocery, etc.)
-Keep explanations warm, short, encouraging.
-Use emojis where appropriate.
-============================================================
-FORMAT SUMMARY
-============================================================
-WHEN ASKING A QUESTION:
-- ONE question only.
-- End with “This is a [Topic] question.”
-WHEN RESPONDING TO AN ANSWER:
-1. Correct/Not Correct marker
-2. Short explanation
-3. Shortcut
-4. Ask if they want another question
-NEVER:
-- Award badges
-- Count streaks
-- Mention progress
-- Predict or guess correctness history
-- Pretend to be the student
-- Use “user:” or “assistant:”
-YOUR ROLE:
-- IMPORTANT: NEVER use LaTeX, never use backslashes, never wrap anything in $…$, and never write equations like \frac or \mathbf. Only write plain English text and plain numbers.
-- Create SEA-standard questions based on the official SEA framework.
-- Test: Number (34 marks), Measurement (18 marks), Geometry (11 marks), Statistics (12 marks).
-- Use 11-year-old friendly language.
-- Give ONE question at a time.
-- After they answer, tell if correct and explain.
-- Teach shortcuts and hacks.
-ABSOLUTE RULE ABOUT TOPICS (DO NOT DISOBEY):
-You will always be given a Topic, which is one of:
-- "Number"
-- "Measurement"
-- "Geometry"
-- "Statistics"
-- "Mixed"
-- "Full Test"
-You MUST follow these rules:
-1. If Topic is "Number": EVERY question must be ONLY a Number question.
-2. If Topic is "Measurement": EVERY question must be ONLY a Measurement question.
-3. If Topic is "Geometry": EVERY question must be ONLY a Geometry question.
-4. If Topic is "Statistics": EVERY question must be ONLY a Statistics question.
-5. If Topic is "Mixed": You may mix all four strands.
-6. If Topic is "Full Test": Simulate
+When student answers:
+- If CORRECT: First line must be “✅ Correct!” or “🎉 Yes!” or “Excellent!”
+- If WRONG: First line must be “❌ Not quite” or “That's not correct”
+Then: short explanation + tip + “Want another question?”
+NEVER mention streaks or badges.
+You are helping them become math champions! 🏆"""
+
+# ============================================
+# PAGE CONFIG + CSS (Progress visible!)
+# ============================================
+st.set_page_config(page_title="SEA Math Super-Tutor", page_icon="🎓", layout="wide", initial_sidebar_state="collapsed")
+
+def load_css():
+    st.markdown("""
+    <style>
+    .stApp {background-color: #f5f7fb;}
+    #MainMenu, footer, header, .stDeployButton {visibility: hidden;}
+    .stChatMessage .stMarkdown p {color: #111827 !important;}
+    [data-testid="stChatMessage"] > div:first-child {display: none !important;}
+    .stChatMessage[data-testid="stChatMessageUser"] {background-color: #e0f2fe !important; border-radius: 14px; padding: 0.75rem 1rem;}
+    .stChatMessage[data-testid="stChatMessageAssistant"] {background-color: #ffffff !important; border-radius: 14px; padding: 0.75rem 1rem;}
+    .stButton > button {
+        border-radius: 14px; font-weight: 700; border: none; padding: 0.85rem 1.1rem;
+        font-size: 1.05rem; color: #fff !important;
+        background: linear-gradient(135deg, #4f46e5, #6366f1);
+        box-shadow: 0 4px 10px rgba(79,70,229,0.25);
+    }
+    div[data-testid="column"] > div > div > button {min-height: 120px; white-space: pre-wrap;}
+    .stExpander > div > label, .stExpander .stMarkdown {color: #111827 !important; font-weight: 600;}
+    </style>
+    """, unsafe_allow_html=True)
+load_css()
+
+# ============================================
+# SESSION STATE + STREAK
+# ============================================
+for key, value in {
+    "screen": "dashboard", "student_name": None, "first_name": None, "student_id": None,
+    "current_topic": None, "questions_answered": 0, "correct_answers": 0,
+    "current_streak": 0, "best_streak": 0, "session_start": None,
+    "conversation_history": [], "question_start_time": datetime.now(TT_TZ),
+    "daily_usage": {"date": get_tt_date().isoformat(), "count": 0}, "pending_logs": []
+}.items():
+    st.session_state.setdefault(key, value)
+
+# ============================================
+# BADGE SYSTEM
+# ============================================
+def award_global_badge(streak):
+    name = st.session_state.first_name.split()[0] if st.session_state.first_name else "Champion"
+    if streak == 5:
+        st.balloons()
+        st.success(f"🎖️ **BRONZE STAR** – {name}, 5 in a row! Keep shining! ✨")
+    elif streak == 10:
+        st.snow()
+        st.success(f"🏆 **SILVER TROPHY** – {name} hits 10 perfect! Unstoppable! 🚀")
+    elif streak == 15:
+        st.balloons()
+        st.success(f"🥇 **GOLD MEDAL** – {name} scores 15 in a row! Champion! 🏆")
+    elif streak == 20:
+        st.fireworks()
+        st.success(f"👑 **PLATINUM CROWN** – {name} reaches 20! You're royalty! 👑")
+    elif streak == 25:
+        st.fireworks()
+        st.toast("💎 DIAMOND LEGEND UNLOCKED!", icon="💎")
+        st.balloons()
+        st.success(f"💎 **DIAMOND LEGEND** – {name} got 25 in a row! SEA HISTORY! 🌟")
+
+# ============================================
+# LOGGING
+# ============================================
+def flush_logs():
+    if st.session_state.pending_logs:
+        try:
+            get_sheets_client().worksheet("Activity_Log").append_rows(st.session_state.pending_logs)
+            st.session_state.pending_logs.clear()
+        except: pass
+
+def log_student_activity(sid, name, qtype, strand, correct, secs):
+    ts = datetime.now(TT_TZ).strftime("%Y-%m-%d %H:%M:%S")
+    st.session_state.pending_logs.append([ts, sid, name, qtype, strand, "Yes" if correct else "No", secs])
+    st.session_state.daily_usage["count"] += 1
+    if len(st.session_state.pending_logs) >= 5: flush_logs()
+
+# ============================================
+# CHAT
+# ============================================
+def get_or_create_chat():
+    if "gemini_chat" not in st.session_state:
+        chat = get_gemini_model().start_chat(history=[
+            {"role": "user", "parts": [SYSTEM_PROMPT]},
+            {"role": "model", "parts": ["Understood!"]}
+        ])
+        st.session_state.gemini_chat = chat
+    return st.session_state.gemini_chat
+
+# ============================================
+# PRACTICE SCREEN
+# ============================================
+def show_practice_screen():
+    col1, col2 = st.columns([5,1])
+    with col1:
+        icons = {"Number":"🔢","Measurement":"📏","Geometry":"📐","Statistics":"📊","Mixed":"🎲","Full Test":"📝"}
+        st.title(f"{icons.get(st.session_state.current_topic,'📚')} {st.session_state.current_topic} Practice")
+    with col2:
+        if st.button("🚪 Exit"):
+            st.session_state.screen = "dashboard"
+            st.rerun()
+
+    c1,c2,c3,c4 = st.columns(4)
+    with c1: st.metric("Questions", st.session_state.questions_answered)
+    with c2: st.metric("Correct", st.session_state.correct_answers)
+    with c3: st.metric("Accuracy", f"{round(st.session_state.correct_answers/max(st.session_state.questions_answered,1)*100)}%")
+    with c4: st.metric("🔥 Streak", st.session_state.current_streak if st.session_state.current_streak else "—")
+
+    st.write("---")
+
+    for msg in st.session_state.conversation_history:
+        with st.chat_message(msg["role"], avatar="🤖" if msg["role"]=="assistant" else "👤"):
+            st.markdown(msg["content"])
+
+    if not st.session_state.conversation_history:
+        st.info(f"👋 Hi {st.session_state.first_name}! Type **Start** or **Next** to begin!")
+
+    if prompt := st.chat_input("Type your answer or say 'Next'…"):
+        st.session_state.conversation_history.append({"role": "user", "content": prompt})
+        with st.chat_message("user", avatar="👤"): st.markdown(prompt)
+
+        with st.chat_message("assistant", avatar="🤖"):
+            with st.spinner("Thinking…"):
+                resp = get_or_create_chat().send_message(
+                    f"Student: {st.session_state.first_name}\nTopic: {st.session_state.current_topic}\n\n{prompt}"
+                )
+                text = resp.text
+                st.markdown(text)
+                st.session_state.conversation_history.append({"role": "assistant", "content": text})
+
+                first = text.splitlines()[0].strip().lower()
+                correct = any(x in first for x in ["correct","yes!","excellent","great job","well done","perfect","right","you got it"])
+                wrong = any(x in first for x in ["not quite","not correct","try again","wrong","almost"])
+
+                if correct or wrong:
+                    st.session_state.questions_answered += 1
+                    if correct:
+                        st.session_state.correct_answers += 1
+                        st.session_state.current_streak += 1
+                        if st.session_state.current_streak > st.session_state.best_streak:
+                            st.session_state.best_streak = st.session_state.current_streak
+                        if st.session_state.current_streak in [5,10,15,20,25]:
+                            award_global_badge(st.session_state.current_streak)
+                    else:
+                        if st.session_state.current_streak >= 5:
+                            st.info(f"🔥 Streak ended at {st.session_state.current_streak} — amazing effort! 💪")
+                        st.session_state.current_streak = 0
+
+                    elapsed = (datetime.now(TT_TZ) - st.session_state.question_start_time).total_seconds()
+                    log_student_activity(st.session_state.student_id, st.session_state.student_name,
+                                         "Question", st.session_state.current_topic, correct, int(elapsed))
+                    st.session_state.question_start_time = datetime.now(TT_TZ)
+
+# ============================================
+# DASHBOARD
+# ============================================
+def show_dashboard():
+    st.markdown("<h1 style='text-align:center;color:#667eea'>🎓 SEA Math Super-Tutor</h1>", unsafe_allow_html=True)
+
+    if not st.session_state.student_name:
+        col1, col2, col3 = st.columns(3)
+        with col1: first = st.text_input("First Name")
+        with col2: last = st.text_input("Last Name")
+        with col3: code = st.text_input("Class Code", type="password")
+        if st.button("Enter"):
+            if first and last and code == "MATH2025":
+                st.session_state.student_name = f"{first} {last}"
+                st.session_state.first_name = first
+                st.session_state.student_id = f"STU{hash(first+last)%10000}"
+                st.rerun()
+        return
+
+    st.success(f"Welcome back, {st.session_state.first_name}! 🎉")
+
+    if st.button("📊 View Progress"):
+        with st.expander("Your Progress", expanded=True):
+            st.metric("Streak", st.session_state.current_streak)
+            st.metric("Best Streak", st.session_state.best_streak)
+
+    col1, col2 = st.columns(2)
+    topics = ["Number", "Measurement", "Geometry", "Statistics", "Mixed", "Full Test"]
+    icons = ["🔢", "📏", "📐", "📊", "🎲", "📝"]
+    for i, topic in enumerate(topics):
+        with col1 if i % 2 == 0 else col2:
+            if st.button(f"{icons[i]} {topic}"):
+                st.session_state.current_topic = topic
+                st.session_state.screen = "practice"
+                st.session_state.conversation_history = []
+                st.rerun()
+
+# ============================================
+# MAIN
+# ============================================
+if st.session_state.screen == "practice":
+    show_practice_screen()
+else:
+    show_dashboard()
