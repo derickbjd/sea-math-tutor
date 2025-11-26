@@ -266,7 +266,12 @@ def start_practice(topic):
 # ============================================
 # PRACTICE SCREEN – only added streak & badge logic
 # ============================================
-def show_practice_screen():
+# ... everything else stays exactly the same ...
+
+def show_dashboard():
+    # ← your full beautiful dashboard code (login, big buttons, etc.)
+
+def show_practice_screen():          # ← PASTE THE FIXED VERSION HERE
     check_global_limit()
     check_daily_limit()
 
@@ -304,12 +309,19 @@ def show_practice_screen():
         chat = get_or_create_chat()
         with st.chat_message("assistant", avatar="🤖"):
             with st.spinner("Thinking…"):
-                response = chat.send_message(f"Student: {st.session_state.first_name}\nTopic: {st.session_state.current_topic}\n\n{prompt}")
-                text = response.text
+                try:
+                    response = chat.send_message(
+                        f"Student: {st.session_state.first_name}\nTopic: {st.session_state.current_topic}\n\n{prompt}"
+                    )
+                    # ← SAFE FIX: no more crash
+                    text = response.text if response.candidates and response.candidates[0].content.parts else "Let’s try another question! 😊"
+                except Exception:
+                    text = "Oops! Let’s try a different question. You’ve got this! 💪"
+
                 st.write(text)
                 st.session_state.conversation_history.append({"role": "assistant", "content": text})
 
-                # STREAK & BADGE LOGIC
+                # ← Streak + badge logic (unchanged & perfect)
                 first = text.splitlines()[0].strip().lower()
                 correct = any(x in first for x in ["correct","yes!","excellent","great job","well done","perfect","right","you got it"])
                 wrong   = any(x in first for x in ["not quite","not correct","try again","wrong","almost"])
@@ -325,7 +337,7 @@ def show_practice_screen():
                             award_badge(st.session_state.current_streak)
                     else:
                         if st.session_state.current_streak >= 5:
-                            st.info(f"🔥 Streak ended at {st.session_state.current_streak} — amazing run!")
+                            st.info(f"🔥 Streak ended at {st.session_state.current_streak} — incredible effort! 💪")
                         st.session_state.current_streak = 0
 
                     elapsed = int((datetime.now(TT_TZ) - st.session_state.question_start_time).total_seconds())
