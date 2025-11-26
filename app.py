@@ -180,21 +180,118 @@ st.set_page_config(page_title="SEA Math Super-Tutor", page_icon="🎓", layout="
 def load_css():
     st.markdown("""
     <style>
-    .stApp {background-color: #f5f7fb;}
-    #MainMenu, footer, header, .stDeployButton {visibility: hidden;}
-    .stChatMessage .stMarkdown p {color: #111827 !important;}
-    [data-testid="stChatMessage"] > div:first-child {display: none !important;}
-    .stChatMessage[data-testid="stChatMessageUser"] {background-color: #e0f2fe !important; border-radius: 14px; padding: 0.75rem 1rem;}
-    .stChatMessage[data-testid="stChatMessageAssistant"] {background-color: #ffffff !important; border-radius: 14px; padding: 0.75rem 1rem;}
-    .stButton > button {
-        border-radius: 14px; font-weight: 700; border: none; padding: 0.85rem 1.1rem;
-        font-size: 1.05rem; color: #fff !important;
-        background: linear-gradient(135deg, #4f46e5, #6366f1);
-        box-shadow: 0 4px 10px rgba(79,70,229,0.25);
+    /* Global app background & text */
+    .stApp {
+        background-color: #020617; /* very dark navy */
+        color: #e5e7eb !important;  /* light gray text */
     }
-    div[data-testid="column"] > div > div > button {min-height: 120px; white-space: pre-wrap;}
+    [data-testid="stAppViewContainer"],
+    [data-testid="stSidebar"] {
+        background-color: #020617 !important;
+    }
+    [data-testid="stHeader"] {
+        background-color: #020617 !important;
+    }
+
+    /* Hide default chrome */
+    #MainMenu, footer, header, .stDeployButton {visibility: hidden;}
+
+    /* Typography overrides */
+    html, body, [class^="css"]  {
+        color: #e5e7eb !important;
+    }
+    .stMarkdown, .stMarkdown p, .stMarkdown h1, .stMarkdown h2, .stMarkdown h3, .stMarkdown li {
+        color: #e5e7eb !important;
+    }
+    label, .stTextInput label, .stNumberInput label {
+        color: #e5e7eb !important;
+    }
+
+    /* Chat messages */
+    .stChatMessage[data-testid="stChatMessageUser"] {
+        background-color: #111827 !important; /* slate-900 */
+        border-radius: 14px;
+        padding: 0.75rem 1rem;
+        color: #e5e7eb !important;
+    }
+    .stChatMessage[data-testid="stChatMessageAssistant"] {
+        background-color: #020617 !important; /* slightly different dark */
+        border-radius: 14px;
+        padding: 0.75rem 1rem;
+        color: #e5e7eb !important;
+    }
+    .stChatMessage .stMarkdown p {
+        color: #e5e7eb !important;
+    }
+    /* Hide role labels */
+    [data-testid="stChatMessage"] > div:first-child {display: none !important;}
+
+    /* Inputs (text fields, password, etc.) */
+    input, textarea {
+        background-color: #020617 !important;
+        color: #e5e7eb !important;
+        border-color: #374151 !important;
+    }
+    input:focus, textarea:focus {
+        outline: none !important;
+        border-color: #6366f1 !important;
+        box-shadow: 0 0 0 1px #6366f1 !important;
+    }
+    ::placeholder {
+        color: #6b7280 !important;
+    }
+
+    /* Chat input box */
+    [data-testid="stChatInput"] textarea {
+        background-color: #020617 !important;
+        color: #e5e7eb !important;
+    }
+
+    /* Metrics panels */
+    [data-testid="metric-container"] {
+        background-color: #020617 !important;
+        border-radius: 12px;
+        padding: 0.75rem;
+        border: 1px solid #1f2937;
+    }
+    [data-testid="metric-container"] label,
+    [data-testid="metric-container"] span {
+        color: #e5e7eb !important;
+    }
+
+    /* Buttons */
+    .stButton > button {
+        border-radius: 14px;
+        font-weight: 700;
+        border: none;
+        padding: 0.85rem 1.1rem;
+        font-size: 1.05rem;
+        color: #ffffff !important;
+        background: linear-gradient(135deg, #4f46e5, #6366f1);
+        box-shadow: 0 4px 10px rgba(15,23,42,0.6);
+    }
+    .stButton > button:hover {
+        box-shadow: 0 6px 14px rgba(15,23,42,0.9);
+        opacity: 0.95;
+    }
+
+    /* Topic buttons in columns */
+    div[data-testid="column"] > div > div > button {
+        min-height: 120px;
+        white-space: pre-wrap;
+    }
+
+    /* Info / success / warning boxes */
+    .stAlert {
+        background-color: #0f172a !important;
+        color: #e5e7eb !important;
+    }
+    .stAlert p {
+        color: #e5e7eb !important;
+    }
     </style>
     """, unsafe_allow_html=True)
+
 load_css()
 
 # ============================================
@@ -281,11 +378,17 @@ def get_or_create_chat():
 # DASHBOARD
 # ============================================
 def show_dashboard():
-    st.markdown("<h1 style='text-align:center;color:#667eea'>🎓 SEA Math Super-Tutor</h1>", unsafe_allow_html=True)
-    st.markdown("<p style='text-align:center;color:#555;font-size:20px'>Your Friendly AI Math Coach for SEA Success!</p>", unsafe_allow_html=True)
+    st.markdown("<h1 style='text-align:center;color:#a5b4fc'>🎓 SEA Math Super-Tutor</h1>", unsafe_allow_html=True)
+    st.markdown("<p style='text-align:center;color:#e5e7eb;font-size:20px'>Your Friendly AI Math Coach for SEA Success!</p>", unsafe_allow_html=True)
 
     if not st.session_state.student_name:
-        st.markdown("<div style='background:linear-gradient(135deg,#f97316,#ec4899);padding:30px;border-radius:18px;text-align:center;color:white'><h2>👋 Welcome, Champion!</h2><p>Enter your details to start!</p></div>", unsafe_allow_html=True)
+        st.markdown("""
+        <div style='background:linear-gradient(135deg,#f97316,#ec4899);
+                    padding:30px;border-radius:18px;text-align:center;color:white'>
+            <h2>👋 Welcome, Champion!</h2>
+            <p>Enter your details to start!</p>
+        </div>
+        """, unsafe_allow_html=True)
         col1, col2, col3 = st.columns(3)
         with col1: first = st.text_input("First Name")
         with col2: last = st.text_input("Last Name")
