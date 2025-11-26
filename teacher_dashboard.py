@@ -87,33 +87,93 @@ def load_student_data():
 
 @st.cache_data(ttl=60)
 def load_activity_log():
-    """Load activity log data"""
+    """Load activity log data with explicit header handling"""
     try:
         sheet = connect_to_sheets()
-        if sheet:
-            activity_sheet = sheet.worksheet("Activity_Log")
-            data = activity_sheet.get_all_records()
-            df = pd.DataFrame(data)
-            return df
-        return pd.DataFrame()
+        if not sheet:
+            return pd.DataFrame()
+
+        activity_sheet = sheet.worksheet("Activity_Log")
+        values = activity_sheet.get_all_values()
+
+        # If sheet is completely empty
+        if not values:
+            return pd.DataFrame(
+                columns=[
+                    "Timestamp",
+                    "Student_ID",
+                    "Student_Name",
+                    "Question_Type",
+                    "Strand",
+                    "Correct",
+                    "Time_Seconds",
+                ]
+            )
+
+        # First row is header, remaining are data rows
+        header = [h.strip() for h in values[0]]
+        rows = values[1:]
+
+        if not rows:
+            df = pd.DataFrame(columns=header)
+        else:
+            df = pd.DataFrame(rows, columns=header)
+
+        # Normalise column names (defensive)
+        df.columns = [c.strip() for c in df.columns]
+
+        # Convert time column to numeric if present
+        if "Time_Seconds" in df.columns:
+            df["Time_Seconds"] = pd.to_numeric(df["Time_Seconds"], errors="coerce")
+
+        return df
+
     except Exception as e:
         st.error(f"Error loading activity log: {e}")
-        return pd.DataFrame()
+        return pd.DataFrame(
+            columns=[
+                "Timestamp",
+                "Student_ID",
+                "Student_Name",
+                "Question_Type",
+                "Strand",
+                "Correct",
+                "Time_Seconds",
+            ]
+        )
 
 @st.cache_data(ttl=60)
 def load_badges():
-    """Load badge data"""
+    """Load badge data with explicit header handling"""
     try:
         sheet = connect_to_sheets()
-        if sheet:
-            badges_sheet = sheet.worksheet("Badges")
-            data = badges_sheet.get_all_records()
-            df = pd.DataFrame(data)
-            return df
-        return pd.DataFrame()
+        if not sheet:
+            return pd.DataFrame()
+
+        badges_sheet = sheet.worksheet("Badges")
+        values = badges_sheet.get_all_values()
+
+        if not values:
+            return pd.DataFrame(
+                columns=["Student_Name", "Badge_Name", "Date_Earned"]
+            )
+
+        header = [h.strip() for h in values[0]]
+        rows = values[1:]
+
+        if not rows:
+            df = pd.DataFrame(columns=header)
+        else:
+            df = pd.DataFrame(rows, columns=header)
+
+        df.columns = [c.strip() for c in df.columns]
+        return df
+
     except Exception as e:
         st.error(f"Error loading badges: {e}")
-        return pd.DataFrame()
+        return pd.DataFrame(
+            columns=["Student_Name", "Badge_Name", "Date_Earned"]
+        )
 
 # ============================================
 # DASHBOARD FUNCTIONS
@@ -487,58 +547,6 @@ def analytics_page():
     
     st.dataframe(top_students, use_container_width=True, hide_index=True)
 
-# ============================================
-# MAIN DASHBOARD
-# ============================================
-
-def main():
-    """Main dashboard application"""
-    
-    # Check authentication
-    check_password()
-    
-    # Title
-    st.title("👨‍🏫 SEA Math Tutor - Teacher Dashboard")
-    
-    # Sidebar navigation
-    with st.sidebar:
-        st.header("Navigation")
-        page = st.radio("Go to:", ["Class Overview", "Student Details", "Analytics", "Usage Monitoring"])
-        
-        st.write("---")
-        
-        # Refresh button
-        if st.button("🔄 Refresh Data"):
-            st.cache_data.clear()
-            st.rerun()
-        
-        st.write("---")
-        
-        # Logout
-        if st.button("🚪 Logout"):
-            st.session_state.authenticated = False
-            st.rerun()
-    
-    # Display selected page
-    if page == "Class Overview":
-        class_overview()
-    
-    elif page == "Student Details":
-        students_df = load_student_data()
-        
-        if students_df.empty:
-            st.warning("No students yet!")
-        else:
-            student_name = st.selectbox("Select Student:", students_df['Name'].tolist())
-            st.write("---")
-            student_detail(student_name)
-    
-    elif page == "Analytics":
-        analytics_page()
-    
-    elif page == "Usage Monitoring":
-        usage_monitoring()
-
 def usage_monitoring():
     """Monitor system usage and costs"""
     
@@ -667,6 +675,58 @@ def usage_monitoring():
             st.info("No activity today yet.")
     else:
         st.warning("No usage data available yet.")
+
+# ============================================
+# MAIN DASHBOARD
+# ============================================
+
+def main():
+    """Main dashboard application"""
+    
+    # Check authentication
+    check_password()
+    
+    # Title
+    st.title("👨‍🏫 SEA Math Tutor - Teacher Dashboard")
+    
+    # Sidebar navigation
+    with st.sidebar:
+        st.header("Navigation")
+        page = st.radio("Go to:", ["Class Overview", "Student Details", "Analytics", "Usage Monitoring"])
+        
+        st.write("---")
+        
+        # Refresh button
+        if st.button("🔄 Refresh Data"):
+            st.cache_data.clear()
+            st.rerun()
+        
+        st.write("---")
+        
+        # Logout
+        if st.button("🚪 Logout"):
+            st.session_state.authenticated = False
+            st.rerun()
+    
+    # Display selected page
+    if page == "Class Overview":
+        class_overview()
+    
+    elif page == "Student Details":
+        students_df = load_student_data()
+        
+        if students_df.empty:
+            st.warning("No students yet!")
+        else:
+            student_name = st.selectbox("Select Student:", students_df['Name'].tolist())
+            st.write("---")
+            student_detail(student_name)
+    
+    elif page == "Analytics":
+        analytics_page()
+    
+    elif page == "Usage Monitoring":
+        usage_monitoring()
 
 if __name__ == "__main__":
     main()
