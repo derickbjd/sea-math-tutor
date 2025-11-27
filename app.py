@@ -305,7 +305,7 @@ def award_badge(streak):
 
     badge_name = None
 
-    if streak == 1:
+    if streak == 5:
         badge_name = "BRONZE STAR"
         st.balloons()
         st.success(f"🎖️ **BRONZE STAR** – {name}, 5 in a row! Keep shining! ✨")
