@@ -256,7 +256,7 @@ def show_practice_screen():
         st.info(f"👋 Hi {st.session_state.first_name}! Type **Start** to begin!")
 
     if prompt := st.chat_input("Type your answer or say 'Next'…"):
-        st.session_state.conversation_history.append({"role": "user", "content": prompt))
+        st.session_state.conversation_history.append({"role": "user", "content": prompt})
         with st.chat_message("user", avatar="👤"):
             st.markdown(prompt)
 
