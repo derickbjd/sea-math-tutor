@@ -226,8 +226,10 @@ def show_dashboard():
 # ============================================
 # PRACTICE SCREEN — BADGES 100% RELIABLE
 # ============================================
+# ... everything at the top stays EXACTLY the same until show_practice_screen() ...
+
 def show_practice_screen():
-    check_daily_limit()
+    check_daily_limit()   # ← this checks, but never increases the count!
 
     col1, col2 = st.columns([5,1])
     with col1:
@@ -254,7 +256,7 @@ def show_practice_screen():
         st.info(f"👋 Hi {st.session_state.first_name}! Type **Start** to begin!")
 
     if prompt := st.chat_input("Type your answer or say 'Next'…"):
-        st.session_state.conversation_history.append({"role": "user", "content": prompt})
+        st.session_state.conversation_history.append({"role": "user", "content": prompt))
         with st.chat_message("user", avatar="👤"):
             st.markdown(prompt)
 
@@ -270,9 +272,9 @@ def show_practice_screen():
                     text = "Let’s try another question! 😊"
 
                 st.markdown(text)
-                st.session_state.conversation_history.append({"role": "assistant", "content": text})
+                st.session_state.conversation_history.append({"role": "assistant", "content": text))
 
-                # BULLETPROOF CORRECTNESS + BADGE DETECTION
+                # BULLETPROOF DETECTION
                 check_text = (text.lower() + " " + " ".join(text.splitlines()[:3]).lower())
                 correct_keywords = ["correct","yes!","excellent","great job","well done","perfect","right","you got it","that's right","exactly","spot on","brilliant","awesome"]
                 wrong_keywords = ["not quite","not correct","try again","wrong","almost","incorrect","no","that's not"]
@@ -285,6 +287,8 @@ def show_practice_screen():
 
                 if correct or wrong:
                     st.session_state.questions_answered += 1
+                    st.session_state.daily_count = st.session_state.get("daily_count", 0) + 1   # ← THIS IS THE MISSING LINE!
+
                     if correct:
                         st.session_state.correct_answers += 1
                         st.session_state.current_streak += 1
