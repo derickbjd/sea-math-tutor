@@ -36,45 +36,248 @@ def get_sheets_client():
         return None
 
 # ============================================
-# SYSTEM PROMPT (unchanged — perfect)
+# SYSTEM PROMPT
 # ============================================
 SYSTEM_PROMPT = """You are the SEA Math Super-Tutor for Trinidad & Tobago students preparing for their Secondary Entrance Assessment.
-[Your full prompt — left 100% unchanged]"""
+============================================================
+CRITICAL IDENTITY RULES
+============================================================
+ROLE:
+- You are a friendly, encouraging AI math tutor for 11-year-olds.
+- You create SEA curriculum–aligned questions.
+- You explain answers simply and kindly.
+- You NEVER speak harshly or discourage the student.
+YOU MUST NOT:
+- You MUST NOT award badges.
+- You MUST NOT calculate streaks.
+- You MUST NOT say “you got X correct so far.”
+- You MUST NOT invent badge names or achievements.
+- You MUST NOT reference progress (“You are doing well today because…”).
+- You MUST NOT show or mention “user:” or “assistant:” in any reply.
+- You MUST NOT show the answer when asking a question.
+- You MUST NOT answer your own question.
+- You MUST wait for the student’s answer before giving feedback.
+Only the APP calculates correctness, streaks, progress, and badges — NOT YOU.
+============================================================
+BADGE & STREAK PROTECTION (CRITICAL)
+============================================================
+You MUST NOT:
+- Tell a student they earned a badge.
+- Mention streaks (“You have 4 in a row”).
+- Say “One more for the next badge.”
+- Say “You are close to a badge.”
+- Mention bronze, silver, gold, platinum, or any badge.
+- Congratulate based on progress — only on the SINGLE answer they just gave.
+============================================================
+QUESTION BEHAVIOR
+============================================================
+WHEN the student says:
+- “start”
+- “next”
+- “give me a question”
+- “another”
+→ Give ONE SEA-style question ONLY.
+When asking a question:
+1. Ask ONE question.
+2. NEVER include the answer.
+3. Keep language simple.
+4. End by stating:
+   “This is a [Number] question.”
+   OR Measurement / Geometry / Statistics
+   (based on the topic given by the app)
+5. Do NOT explain anything yet.
+============================================================
+ANSWER FEEDBACK BEHAVIOR
+============================================================
+When the student gives an answer:
+FIRST LINE IF CORRECT:
+- “✅ Correct!”
+- “🎉 Yes! Correct!”
+- “✓ Right!”
+- “Excellent work!”
+- “You got it!”
+FIRST LINE IF WRONG:
+- “❌ Not quite.”
+- “That's not correct.”
+- “Good try, but not correct.”
+- “Almost, but not quite.”
+Then:
+- Give a short explanation (2–3 sentences maximum).
+- Teach a helpful trick or shortcut.
+- Ask “Want another question?”
+Do NOT:
+- Reference streaks
+- Mention badges
+- Mention progress
+- Compare to earlier questions
+- Say “Four in a row!” or any number
+============================================================
+TOPICS & CONTENT
+============================================================
+NUMBER (34 marks): whole numbers, fractions, decimals, percentages, operations
+MEASUREMENT (18 marks): length, area, volume, time, money, conversions
+GEOMETRY (11 marks): angles, symmetry, shapes, nets
+STATISTICS (12 marks): bar graphs, pictographs, mean, mode
+Use Trinidadian examples when appropriate (doubles, maxi, Carnival, grocery, etc.)
+Keep explanations warm, short, encouraging.
+Use emojis where appropriate.
+============================================================
+FORMAT SUMMARY
+============================================================
+WHEN ASKING A QUESTION:
+- ONE question only.
+- End with “This is a [Topic] question.”
+WHEN RESPONDING TO AN ANSWER:
+1. Correct/Not Correct marker
+2. Short explanation
+3. Shortcut
+4. Ask if they want another question
+NEVER:
+- Award badges
+- Count streaks
+- Mention progress
+- Predict or guess correctness history
+- Pretend to be the student
+- Use “user:” or “assistant:”
+YOUR ROLE:
+- IMPORTANT: NEVER use LaTeX, never use backslashes, never wrap anything in $…$, and never write equations like \frac or \mathbf. Only write plain English text and plain numbers.
+- Create SEA-standard questions based on the official SEA framework.
+- Test: Number (34 marks), Measurement (18 marks), Geometry (11 marks), Statistics (12 marks).
+- Use 11-year-old friendly language.
+- Give ONE question at a time.
+- After they answer, tell if correct and explain.
+- Teach shortcuts and hacks.
+ABSOLUTE RULE ABOUT TOPICS (DO NOT DISOBEY):
+You will always be given a Topic, which is one of:
+- "Number"
+- "Measurement"
+- "Geometry"
+- "Statistics"
+- "Mixed"
+- "Full Test"
+You MUST follow these rules:
+1. If Topic is "Number": EVERY question must be ONLY a Number question.
+2. If Topic is "Measurement": EVERY question must be ONLY a Measurement question.
+3. If Topic is "Geometry": EVERY question must be ONLY a Geometry question.
+4. If Topic is "Statistics": EVERY question must be ONLY a Statistics question.
+5. If Topic is "Mixed": You may mix all four strands.
+6. If Topic is "Full Test": Simulate a full SEA-style test.
+At the end of each question you MUST clearly say:
+- "This is a [Number] question." etc.
+CRITICAL - ANSWER FEEDBACK FORMAT:
+When student answers, you MUST start your response with one of these:
+- If CORRECT: Start with "✅ Correct!" or "🎉 Yes!" or "✓ Right!" or "Excellent!"
+- If WRONG: Start with "❌ Not quite" or "That's not correct" or "Try again"
+This is VERY IMPORTANT for tracking their progress!
+You are helping them become math champions! 🏆
+"""
 
 # ============================================
-# PAGE CONFIG + CSS (DARK MODE) — unchanged
+# PAGE CONFIG + CSS (DARK MODE)
 # ============================================
 st.set_page_config(page_title="SEA Math Super-Tutor", page_icon="🎓", layout="wide", initial_sidebar_state="collapsed")
+
 def load_css():
     st.markdown("""
     <style>
-    .stApp {background-color: #020617; color: #e5e7eb !important;}
-    [data-testid="stAppViewContainer"], [data-testid="stSidebar"], [data-testid="stHeader"] {background-color: #020617 !important;}
+    .stApp {
+        background-color: #020617;
+        color: #e5e7eb !important;
+    }
+    [data-testid="stAppViewContainer"],
+    [data-testid="stSidebar"],
+    [data-testid="stHeader"] {
+        background-color: #020617 !important;
+    }
     #MainMenu, footer, header, .stDeployButton {visibility: hidden;}
-    html, body, [class^="css"] {color: #e5e7eb !important;}
-    .stMarkdown, .stMarkdown p, .stMarkdown h1, .stMarkdown h2, .stMarkdown h3, .stMarkdown li {color: #e5e7eb !important;}
-    label, .stTextInput label, .stNumberInput label {color: #e5e7eb !important;}
-    .stChatMessage[data-testid="stChatMessageUser"] {background-color: #111827 !important; border-radius: 14px; padding: 0.75rem 1rem; color: #e5e7eb !important;}
-    .stChatMessage[data-testid="stChatMessageAssistant"] {background-color: #020617 !important; border-radius: 14px; padding: 0.75rem 1rem; color: #e5e7eb !important;}
-    .stChatMessage .stMarkdown p {color: #e5e7eb !important;}
+
+    html, body, [class^="css"]  {
+        color: #e5e7eb !important;
+    }
+    .stMarkdown, .stMarkdown p, .stMarkdown h1, .stMarkdown h2, .stMarkdown h3, .stMarkdown li {
+        color: #e5e7eb !important;
+    }
+    label, .stTextInput label, .stNumberInput label {
+        color: #e5e7eb !important;
+    }
+
+    .stChatMessage[data-testid="stChatMessageUser"] {
+        background-color: #111827 !important;
+        border-radius: 14px;
+        padding: 0.75rem 1rem;
+        color: #e5e7eb !important;
+    }
+    .stChatMessage[data-testid="stChatMessageAssistant"] {
+        background-color: #020617 !important;
+        border-radius: 14px;
+        padding: 0.75rem 1rem;
+        color: #e5e7eb !important;
+    }
+    .stChatMessage .stMarkdown p {
+        color: #e5e7eb !important;
+    }
     [data-testid="stChatMessage"] > div:first-child {display: none !important;}
-    input, textarea {background-color: #020617 !important; color: #e5e7eb !important; border-color: #374151 !important;}
-    input:focus, textarea:focus {outline: none !important; border-color: #6366f1 !important; box-shadow: 0 0 0 1px #6366f1 !important;}
-    ::placeholder {color: #6b7280 !important;}
-    [data-testid="stChatInput"] textarea {background-color: #020617 !important; color: #e5e7eb !important;}
-    [data-testid="metric-container"] {background-color: #020617 !important; border-radius: 12px; padding: 0.75rem; border: 1px solid #1f2937;}
-    [data-testid="metric-container"] label, [data-testid="metric-container"] span {color: #e5e7eb !important;}
+
+    input, textarea {
+        background-color: #020617 !important;
+        color: #e5e7eb !important;
+        border-color: #374151 !important;
+    }
+    input:focus, textarea:focus {
+        outline: none !important;
+        border-color: #6366f1 !important;
+        box-shadow: 0 0 0 1px #6366f1 !important;
+    }
+    ::placeholder {
+        color: #6b7280 !important;
+    }
+
+    [data-testid="stChatInput"] textarea {
+        background-color: #020617 !important;
+        color: #e5e7eb !important;
+    }
+
+    [data-testid="metric-container"] {
+        background-color: #020617 !important;
+        border-radius: 12px;
+        padding: 0.75rem;
+        border: 1px solid #1f2937;
+    }
+    [data-testid="metric-container"] label,
+    [data-testid="metric-container"] span {
+        color: #e5e7eb !important;
+    }
+
     .stButton > button {
-        border-radius: 14px; font-weight: 700; border: none; padding: 0.85rem 1.1rem;
-        font-size: 1.05rem; color: #ffffff !important;
+        border-radius: 14px;
+        font-weight: 700;
+        border: none;
+        padding: 0.85rem 1.1rem;
+        font-size: 1.05rem;
+        color: #ffffff !important;
         background: linear-gradient(135deg, #4f46e5, #6366f1);
         box-shadow: 0 4px 10px rgba(15,23,42,0.6);
     }
-    .stButton > button:hover {box-shadow: 0 6px 14px rgba(15,23,42,0.9); opacity: 0.95;}
-    div[data-testid="column"] > div > div > button {min-height: 120px; white-space: pre-wrap;}
-    .stAlert {background-color: #0f172a !important; color: #e5e7eb !important;}
+    .stButton > button:hover {
+        box-shadow: 0 6px 14px rgba(15,23,42,0.9);
+        opacity: 0.95;
+    }
+
+    div[data-testid="column"] > div > div > button {
+        min-height: 120px;
+        white-space: pre-wrap;
+    }
+
+    .stAlert {
+        background-color: #0f172a !important;
+        color: #e5e7eb !important;
+    }
+    .stAlert p {
+        color: #e5e7eb !important;
+    }
     </style>
     """, unsafe_allow_html=True)
+
 load_css()
 
 # ============================================
@@ -93,40 +296,47 @@ st.session_state.setdefault("conversation_history", [])
 st.session_state.setdefault("question_start_time", datetime.now(TT_TZ))
 
 # ============================================
-# BADGE SYSTEM (unchanged — perfect)
+# BADGE SYSTEM (now logs to Sheets)
 # ============================================
 def award_badge(streak):
     name = st.session_state.first_name.split()[0] if st.session_state.first_name else "Champion"
     full_name = st.session_state.student_name or name
     student_id = st.session_state.student_id
+
     badge_name = None
+
     if streak == 5:
         badge_name = "BRONZE STAR"
         st.balloons()
-        st.success(f"**BRONZE STAR** – {name}, 5 in a row! Keep shining! ✨")
+        st.success(f"🎖️ **BRONZE STAR** – {name}, 5 in a row! Keep shining! ✨")
+
     elif streak == 10:
         badge_name = "SILVER TROPHY"
         st.snow()
-        st.success(f"**SILVER TROPHY** – {name} hits 10 perfect! Unstoppable! 🚀")
+        st.success(f"🏆 **SILVER TROPHY** – {name} hits 10 perfect! Unstoppable! 🚀")
+
     elif streak == 15:
         badge_name = "GOLD MEDAL"
         st.balloons()
-        st.success(f"**GOLD MEDAL** – {name} scores 15 in a row! Champion! 🏆")
+        st.success(f"🥇 **GOLD MEDAL** – {name} scores 15 in a row! Champion! 🏆")
+
     elif streak == 20:
         badge_name = "PLATINUM CROWN"
         st.fireworks()
-        st.success(f"**PLATINUM CROWN** – {name} reaches 20! You're royalty! 👑")
+        st.success(f"👑 **PLATINUM CROWN** – {name} reaches 20! You're royalty! 👑")
+
     elif streak == 25:
         badge_name = "DIAMOND LEGEND"
         st.fireworks()
         st.balloons()
-        st.toast("DIAMOND LEGEND UNLOCKED!", icon="💎")
-        st.success(f"**DIAMOND LEGEND** – {name} got 25 in a row! SEA HISTORY! 🌟")
+        st.toast("💎 DIAMOND LEGEND UNLOCKED!", icon="💎")
+        st.success(f"💎 **DIAMOND LEGEND** – {name} got 25 in a row! SEA HISTORY! 🌟")
+
     if badge_name:
         log_badge_award(student_id, full_name, badge_name)
 
 # ============================================
-# HELPER FUNCTIONS (unchanged)
+# HELPER FUNCTIONS
 # ============================================
 def get_or_create_student_id(name):
     base = f"STU{abs(hash(name))}"[:10]
@@ -146,16 +356,20 @@ def log_student_activity(sid, name, qtype, strand, correct, secs):
     try:
         sheet = get_sheets_client()
         if sheet:
-            sheet.worksheet("Activity_Log").append_row([ts, sid, name, qtype, strand, "Yes" if correct else "No", secs])
+            sheet.worksheet("Activity_Log").append_row(
+                [ts, sid, name, qtype, strand, "Yes" if correct else "No", secs]
+            )
     except:
         pass
 
 def log_badge_award(student_id, name, badge_name):
+    """Write a badge award to the Badges sheet so teachers can see it."""
     ts = datetime.now(TT_TZ).strftime("%Y-%m-%d %H:%M:%S")
     try:
         sheet = get_sheets_client()
         if sheet:
-            sheet.worksheet("Badges").append_row([name, badge_name, ts])
+            ws = sheet.worksheet("Badges")
+            ws.append_row([name, badge_name, ts])
     except:
         pass
 
@@ -179,18 +393,25 @@ def get_or_create_chat():
     return st.session_state.gemini_chat
 
 # ============================================
-# DASHBOARD (unchanged)
+# DASHBOARD
 # ============================================
 def show_dashboard():
-    st.markdown("<h1 style='text-align:center;color:#a5b4fc'>SEA Math Super-Tutor</h1>", unsafe_allow_html=True)
+    st.markdown("<h1 style='text-align:center;color:#a5b4fc'>🎓 SEA Math Super-Tutor</h1>", unsafe_allow_html=True)
     st.markdown("<p style='text-align:center;color:#e5e7eb;font-size:20px'>Your Friendly AI Math Coach for SEA Success!</p>", unsafe_allow_html=True)
+
     if not st.session_state.student_name:
-        st.markdown("""<div style='background:linear-gradient(135deg,#f97316,#ec4899);padding:30px;border-radius:18px;text-align:center;color:white'><h2>Welcome, Champion!</h2><p>Enter your details to start!</p></div>""", unsafe_allow_html=True)
+        st.markdown("""
+        <div style='background:linear-gradient(135deg,#f97316,#ec4899);
+                    padding:30px;border-radius:18px;text-align:center;color:white'>
+            <h2>👋 Welcome, Champion!</h2>
+            <p>Enter your details to start!</p>
+        </div>
+        """, unsafe_allow_html=True)
         col1, col2, col3 = st.columns(3)
         with col1: first = st.text_input("First Name")
         with col2: last = st.text_input("Last Name")
         with col3: code = st.text_input("Class Code", type="password")
-        if st.button("Enter"):
+        if st.button("✅ Enter"):
             if first and last and code in st.secrets.get("class_codes", "MATH2025").split(","):
                 name = f"{first} {last}"
                 st.session_state.student_name = name
@@ -200,14 +421,17 @@ def show_dashboard():
             else:
                 st.error("Check your details!")
         return
+
     st.success(f"Welcome back, {st.session_state.first_name}! 🎉")
-    if st.button("View Progress"):
+
+    if st.button("📊 View Progress"):
         with st.expander("Your Progress Today", expanded=True):
             st.metric("Streak", st.session_state.current_streak)
             st.metric("Best Streak", st.session_state.best_streak)
+
     col1, col2 = st.columns(2)
     topics = ["Number", "Measurement", "Geometry", "Statistics", "Mixed", "Full Test"]
-    icons = ["Number","Measurement","Geometry","Statistics","Mixed","Full Test"]
+    icons = ["🔢", "📏", "📐", "📊", "🎲", "📝"]
     for i, topic in enumerate(topics):
         with col1 if i % 2 == 0 else col2:
             if st.button(f"{icons[i]} {topic}", use_container_width=True):
@@ -217,16 +441,17 @@ def show_dashboard():
                 st.rerun()
 
 # ============================================
-# PRACTICE SCREEN — ONLY CHANGE: BULLETPROOF BADGE DETECTION
+# PRACTICE SCREEN
 # ============================================
 def show_practice_screen():
     check_daily_limit()
+
     col1, col2 = st.columns([5,1])
     with col1:
-        icons = {"Number":"Number","Measurement":"Measurement","Geometry":"Geometry","Statistics":"Statistics","Mixed":"Mixed","Full Test":"Full Test"}
+        icons = {"Number":"🔢","Measurement":"📏","Geometry":"📐","Statistics":"📊","Mixed":"🎲","Full Test":"📝"}
         st.title(f"{icons[st.session_state.current_topic]} {st.session_state.current_topic} Practice")
     with col2:
-        if st.button("Exit"):
+        if st.button("🚪 Exit"):
             st.session_state.screen = "dashboard"
             st.rerun()
 
@@ -234,7 +459,7 @@ def show_practice_screen():
     with c1: st.metric("Questions", st.session_state.questions_answered)
     with c2: st.metric("Correct", st.session_state.correct_answers)
     with c3: st.metric("Accuracy", f"{round(st.session_state.correct_answers/max(st.session_state.questions_answered,1)*100)}%")
-    with c4: st.metric("Streak", st.session_state.current_streak)
+    with c4: st.metric("🔥 Streak", st.session_state.current_streak)
 
     st.write("---")
 
@@ -243,7 +468,7 @@ def show_practice_screen():
             st.markdown(msg["content"])
 
     if not st.session_state.conversation_history:
-        st.info(f"Hi {st.session_state.first_name}! Type **Start** to begin!")
+        st.info(f"👋 Hi {st.session_state.first_name}! Type **Start** to begin!")
 
     if prompt := st.chat_input("Type your answer or say 'Next'…"):
         st.session_state.conversation_history.append({"role": "user", "content": prompt})
@@ -254,7 +479,9 @@ def show_practice_screen():
         with st.chat_message("assistant", avatar="🤖"):
             with st.spinner("Thinking…"):
                 try:
-                    response = chat.send_message(f"Student: {st.session_state.first_name}\nTopic: {st.session_state.current_topic}\n\n{prompt}")
+                    response = chat.send_message(
+                        f"Student: {st.session_state.first_name}\nTopic: {st.session_state.current_topic}\n\n{prompt}"
+                    )
                     text = response.text
                 except:
                     text = "Let’s try another question! 😊"
@@ -262,35 +489,33 @@ def show_practice_screen():
                 st.markdown(text)
                 st.session_state.conversation_history.append({"role": "assistant", "content": text})
 
-                # ONLY CHANGE: SMARTER + RELIABLE CORRECTNESS CHECK
-                check_text = text.lower()
-                correct_keywords = ["correct","yes!","excellent","great job","well done","perfect","right","you got it","that's right","exactly","brilliant","awesome","fantastic","spot on"]
-                wrong_keywords = ["not quite","not correct","try again","wrong","almost","incorrect","no"]
-
-                has_correct = any(word in check_text for word in correct_keywords) or "✅" in text or "✓" in text
-                has_wrong = any(word in check_text for word in wrong_keywords) or "❌" in text
-
-                correct = has_correct and not has_wrong
-                wrong = has_wrong and not has_correct
+                first = text.splitlines()[0].strip().lower()
+                correct = any(x in first for x in ["correct","yes!","excellent","great job","well done","perfect","right","you got it"])
+                wrong = any(x in first for x in ["not quite","not correct","try again","wrong","almost"])
 
                 if correct or wrong:
                     st.session_state.questions_answered += 1
-                    st.session_state.daily_count = st.session_state.get("daily_count", 0) + 1  # prevents loop
-
                     if correct:
                         st.session_state.correct_answers += 1
                         st.session_state.current_streak += 1
                         if st.session_state.current_streak > st.session_state.best_streak:
                             st.session_state.best_streak = st.session_state.current_streak
-                        if st.session_state.current_streak in [5, 10, 15, 20, 25]:
-                            award_badge(st.session_state.current_streak)  # NOW 100% GUARANTEED TO FIRE
+                        if st.session_state.current_streak in [5,10,15,20,25]:
+                            award_badge(st.session_state.current_streak)
                     else:
                         if st.session_state.current_streak >= 5:
                             st.info(f"Streak ended at {st.session_state.current_streak} — great job!")
                         st.session_state.current_streak = 0
 
                     elapsed = int((datetime.now(TT_TZ) - st.session_state.question_start_time).total_seconds())
-                    log_student_activity(st.session_state.student_id, st.session_state.student_name, "Question", st.session_state.current_topic, correct, elapsed)
+                    log_student_activity(
+                        st.session_state.student_id,
+                        st.session_state.student_name,
+                        "Question",
+                        st.session_state.current_topic,
+                        correct,
+                        elapsed
+                    )
                     st.session_state.question_start_time = datetime.now(TT_TZ)
 
 # ============================================
