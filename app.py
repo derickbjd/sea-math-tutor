@@ -36,7 +36,7 @@ def get_sheets_client():
         return None
 
 # ============================================
-# SYSTEM PROMPT (your full original)
+# SYSTEM PROMPT
 # ============================================
 SYSTEM_PROMPT = """You are the SEA Math Super-Tutor for Trinidad & Tobago students preparing for their Secondary Entrance Assessment.
 ============================================================
@@ -173,30 +173,24 @@ You are helping them become math champions! 🏆
 """
 
 # ============================================
-# PAGE CONFIG + CSS
+# PAGE CONFIG + CSS (DARK MODE)
 # ============================================
 st.set_page_config(page_title="SEA Math Super-Tutor", page_icon="🎓", layout="wide", initial_sidebar_state="collapsed")
 
 def load_css():
     st.markdown("""
     <style>
-    /* Global app background & text */
     .stApp {
-        background-color: #020617; /* very dark navy */
-        color: #e5e7eb !important;  /* light gray text */
+        background-color: #020617;
+        color: #e5e7eb !important;
     }
     [data-testid="stAppViewContainer"],
-    [data-testid="stSidebar"] {
-        background-color: #020617 !important;
-    }
+    [data-testid="stSidebar"],
     [data-testid="stHeader"] {
         background-color: #020617 !important;
     }
-
-    /* Hide default chrome */
     #MainMenu, footer, header, .stDeployButton {visibility: hidden;}
 
-    /* Typography overrides */
     html, body, [class^="css"]  {
         color: #e5e7eb !important;
     }
@@ -207,15 +201,14 @@ def load_css():
         color: #e5e7eb !important;
     }
 
-    /* Chat messages */
     .stChatMessage[data-testid="stChatMessageUser"] {
-        background-color: #111827 !important; /* slate-900 */
+        background-color: #111827 !important;
         border-radius: 14px;
         padding: 0.75rem 1rem;
         color: #e5e7eb !important;
     }
     .stChatMessage[data-testid="stChatMessageAssistant"] {
-        background-color: #020617 !important; /* slightly different dark */
+        background-color: #020617 !important;
         border-radius: 14px;
         padding: 0.75rem 1rem;
         color: #e5e7eb !important;
@@ -223,10 +216,8 @@ def load_css():
     .stChatMessage .stMarkdown p {
         color: #e5e7eb !important;
     }
-    /* Hide role labels */
     [data-testid="stChatMessage"] > div:first-child {display: none !important;}
 
-    /* Inputs (text fields, password, etc.) */
     input, textarea {
         background-color: #020617 !important;
         color: #e5e7eb !important;
@@ -241,13 +232,11 @@ def load_css():
         color: #6b7280 !important;
     }
 
-    /* Chat input box */
     [data-testid="stChatInput"] textarea {
         background-color: #020617 !important;
         color: #e5e7eb !important;
     }
 
-    /* Metrics panels */
     [data-testid="metric-container"] {
         background-color: #020617 !important;
         border-radius: 12px;
@@ -259,7 +248,6 @@ def load_css():
         color: #e5e7eb !important;
     }
 
-    /* Buttons */
     .stButton > button {
         border-radius: 14px;
         font-weight: 700;
@@ -275,13 +263,11 @@ def load_css():
         opacity: 0.95;
     }
 
-    /* Topic buttons in columns */
     div[data-testid="column"] > div > div > button {
         min-height: 120px;
         white-space: pre-wrap;
     }
 
-    /* Info / success / warning boxes */
     .stAlert {
         background-color: #0f172a !important;
         color: #e5e7eb !important;
@@ -310,44 +296,8 @@ st.session_state.setdefault("conversation_history", [])
 st.session_state.setdefault("question_start_time", datetime.now(TT_TZ))
 
 # ============================================
-# BADGE SYSTEM
+# BADGE SYSTEM (now logs to Sheets)
 # ============================================
-def award_badge(streak):
-    name = st.session_state.first_name.split()[0] if st.session_state.first_name else "Champion"
-    if streak == 5:
-        st.balloons()
-        st.success(f"🎖️ **BRONZE STAR** – {name}, 5 in a row! Keep shining! ✨")
-    elif streak == 10:
-        st.snow()
-        st.success(f"🏆 **SILVER TROPHY** – {name} hits 10 perfect! Unstoppable! 🚀")
-    elif streak == 15:
-        st.balloons()
-        st.success(f"🥇 **GOLD MEDAL** – {name} scores 15 in a row! Champion! 🏆")
-    elif streak == 20:
-        st.fireworks()
-        st.success(f"👑 **PLATINUM CROWN** – {name} reaches 20! You're royalty! 👑")
-    elif streak == 25:
-        st.fireworks()
-        st.balloons()
-        st.toast("💎 DIAMOND LEGEND UNLOCKED!", icon="💎")
-        st.success(f"💎 **DIAMOND LEGEND** – {name} got 25 in a row! SEA HISTORY! 🌟")
-
-# ============================================
-# HELPER FUNCTIONS
-# ============================================
-def get_or_create_student_id(name):
-    base = f"STU{abs(hash(name))}"[:10]
-    try:
-        sheet = get_sheets_client()
-        if sheet:
-            students = sheet.worksheet("Students").col_values(2)
-            for i, n in enumerate(students, 1):
-                if n.strip().lower() == name.strip().lower():
-                    return sheet.worksheet("Students").cell(i, 1).value or base
-        return base
-    except:
-        return base
-
 def award_badge(streak):
     name = st.session_state.first_name.split()[0] if st.session_state.first_name else "Champion"
     full_name = st.session_state.student_name or name
@@ -382,10 +332,46 @@ def award_badge(streak):
         st.toast("💎 DIAMOND LEGEND UNLOCKED!", icon="💎")
         st.success(f"💎 **DIAMOND LEGEND** – {name} got 25 in a row! SEA HISTORY! 🌟")
 
-    # If a badge was awarded, write it to Google Sheets
     if badge_name:
         log_badge_award(student_id, full_name, badge_name)
 
+# ============================================
+# HELPER FUNCTIONS
+# ============================================
+def get_or_create_student_id(name):
+    base = f"STU{abs(hash(name))}"[:10]
+    try:
+        sheet = get_sheets_client()
+        if sheet:
+            students = sheet.worksheet("Students").col_values(2)
+            for i, n in enumerate(students, 1):
+                if n.strip().lower() == name.strip().lower():
+                    return sheet.worksheet("Students").cell(i, 1).value or base
+        return base
+    except:
+        return base
+
+def log_student_activity(sid, name, qtype, strand, correct, secs):
+    ts = datetime.now(TT_TZ).strftime("%Y-%m-%d %H:%M:%S")
+    try:
+        sheet = get_sheets_client()
+        if sheet:
+            sheet.worksheet("Activity_Log").append_row(
+                [ts, sid, name, qtype, strand, "Yes" if correct else "No", secs]
+            )
+    except:
+        pass
+
+def log_badge_award(student_id, name, badge_name):
+    """Write a badge award to the Badges sheet so teachers can see it."""
+    ts = datetime.now(TT_TZ).strftime("%Y-%m-%d %H:%M:%S")
+    try:
+        sheet = get_sheets_client()
+        if sheet:
+            ws = sheet.worksheet("Badges")
+            ws.append_row([name, badge_name, ts])
+    except:
+        pass
 
 def check_daily_limit():
     limit = int(st.secrets.get("daily_limit_per_student", 50))
@@ -455,7 +441,7 @@ def show_dashboard():
                 st.rerun()
 
 # ============================================
-# PRACTICE SCREEN (FIXED + BADGES)
+# PRACTICE SCREEN
 # ============================================
 def show_practice_screen():
     check_daily_limit()
@@ -486,13 +472,16 @@ def show_practice_screen():
 
     if prompt := st.chat_input("Type your answer or say 'Next'…"):
         st.session_state.conversation_history.append({"role": "user", "content": prompt})
-        with st.chat_message("user", avatar="👤"): st.markdown(prompt)
+        with st.chat_message("user", avatar="👤"):
+            st.markdown(prompt)
 
         chat = get_or_create_chat()
         with st.chat_message("assistant", avatar="🤖"):
             with st.spinner("Thinking…"):
                 try:
-                    response = chat.send_message(f"Student: {st.session_state.first_name}\nTopic: {st.session_state.current_topic}\n\n{prompt}")
+                    response = chat.send_message(
+                        f"Student: {st.session_state.first_name}\nTopic: {st.session_state.current_topic}\n\n{prompt}"
+                    )
                     text = response.text
                 except:
                     text = "Let’s try another question! 😊"
@@ -519,8 +508,14 @@ def show_practice_screen():
                         st.session_state.current_streak = 0
 
                     elapsed = int((datetime.now(TT_TZ) - st.session_state.question_start_time).total_seconds())
-                    log_student_activity(st.session_state.student_id, st.session_state.student_name,
-                                         "Question", st.session_state.current_topic, correct, elapsed)
+                    log_student_activity(
+                        st.session_state.student_id,
+                        st.session_state.student_name,
+                        "Question",
+                        st.session_state.current_topic,
+                        correct,
+                        elapsed
+                    )
                     st.session_state.question_start_time = datetime.now(TT_TZ)
 
 # ============================================
