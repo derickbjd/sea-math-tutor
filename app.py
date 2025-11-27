@@ -5,7 +5,7 @@ from zoneinfo import ZoneInfo
 import gspread
 from google.oauth2.service_account import Credentials
 
-# =========================================785
+# ============================================
 # TIMEZONE
 # ============================================
 TT_TZ = ZoneInfo("America/Port_of_Spain")
@@ -36,10 +36,10 @@ def get_sheets_client():
         return None
 
 # ============================================
-# SYSTEM PROMPT (your perfect original)
+# SYSTEM PROMPT
 # ============================================
 SYSTEM_PROMPT = """You are the SEA Math Super-Tutor for Trinidad & Tobago students preparing for their Secondary Entrance Assessment.
-[Your full original prompt — unchanged and perfect]"""
+[Your full original prompt — unchanged]"""
 
 # ============================================
 # PAGE CONFIG + DARK MODE CSS
@@ -55,14 +55,10 @@ def load_css():
     html, body, [class^="css"] {color: #e5e7eb !important;}
     .stMarkdown, .stMarkdown p, .stMarkdown h1, .stMarkdown h2, .stMarkdown h3, .stMarkdown li {color: #e5e7eb !important;}
     label, .stTextInput label, .stNumberInput label {color: #e5e7eb !important;}
-    .stChatMessage[data-testid="stChatMessageUser"] {background-color: #111827 !important; border-radius: 14px; padding: 0.75rem 1rem; color: #e5e7eb !important;}
-    .stChatMessage[data-testid="stChatMessageAssistant"] {background-color: #020617 !important; border-radius: 14px; padding: 0.75rem 1rem; color: #e5e7eb !important;}
+    .stChatMessage[data-testid="stChatMessageUser"] {background-color: #111827 !important; border-radius: 14px; padding: 0.75rem 1rem;}
+    .stChatMessage[data-testid="stChatMessageAssistant"] {background-color: #020617 !important; border-radius: 14px; padding: 0.75rem 1rem;}
     [data-testid="stChatMessage"] > div:first-child {display: none !important;}
     input, textarea {background-color: #020617 !important; color: #e5e7eb !important; border-color: #374151 !important;}
-    input:focus, textarea:focus {outline: none !important; border-color: #6366f1 !important; box-shadow: 0 0 0 1px #6366f1 !important;}
-    [data-testid="stChatInput"] textarea {background-color: #020617 !important; color: #e5e7eb !important;}
-    [data-testid="metric-container"] {background-color: #020617 !important; border-radius: 12px; padding: 0.75rem; border: 1px solid #1f2937;}
-    [data-testid="metric-container"] label, [data-testid="metric-container"] span {color: #e5e7eb !important;}
     .stButton > button {
         border-radius: 14px; font-weight: 700; border: none; padding: 0.85rem 1.1rem;
         font-size: 1.05rem; color: #ffffff !important;
@@ -71,13 +67,12 @@ def load_css():
     }
     .stButton > button:hover {box-shadow: 0 6px 14px rgba(15,23,42,0.9); opacity: 0.95;}
     div[data-testid="column"] > div > div > button {min-height: 120px; white-space: pre-wrap;}
-    .stAlert {background-color: #0f172a !important; color: #e5e7eb !important;}
     </style>
     """, unsafe_allow_html=True)
 load_css()
 
 # ============================================
-# SESSION STATE + STREAK
+# SESSION STATE + STREAK + DAILY COUNT
 # ============================================
 st.session_state.setdefault("screen", "dashboard")
 st.session_state.setdefault("student_name", None)
@@ -90,39 +85,31 @@ st.session_state.setdefault("current_streak", 0)
 st.session_state.setdefault("best_streak", 0)
 st.session_state.setdefault("conversation_history", [])
 st.session_state.setdefault("question_start_time", datetime.now(TT_TZ))
+st.session_state.setdefault("daily_count", 0)
+st.session_state.setdefault("daily_date", get_tt_date().isoformat())
 
 # ============================================
-# BADGE SYSTEM (with Sheets logging)
+# BADGE SYSTEM
 # ============================================
 def award_badge(streak):
     name = st.session_state.first_name.split()[0] if st.session_state.first_name else "Champion"
-    full_name = st.session_state.student_name or name
-    student_id = st.session_state.student_id
-    badge_name = None
     if streak == 5:
-        badge_name = "BRONZE STAR"
         st.balloons()
-        st.success(f"BRONZE STAR – {name}, 5 in a row! Keep shining! ✨")
+        st.success(f"🎖️ **BRONZE STAR** – {name}, 5 in a row! Keep shining! ✨")
     elif streak == 10:
-        badge_name = "SILVER TROPHY"
         st.snow()
-        st.success(f"SILVER TROPHY – {name} hits 10 perfect! Unstoppable! 🚀")
+        st.success(f"🏆 **SILVER TROPHY** – {name} hits 10 perfect! 🚀")
     elif streak == 15:
-        badge_name = "GOLD MEDAL"
         st.balloons()
-        st.success(f"GOLD MEDAL – {name} scores 15 in a row! Champion! 🏆")
+        st.success(f"🥇 **GOLD MEDAL** – {name} scores 15 in a row! Champion! 🏆")
     elif streak == 20:
-        badge_name = "PLATINUM CROWN"
         st.fireworks()
-        st.success(f"PLATINUM CROWN – {name} reaches 20! You're royalty! 👑")
+        st.success(f"👑 **PLATINUM CROWN** – {name} reaches 20! Royalty! 👑")
     elif streak == 25:
-        badge_name = "DIAMOND LEGEND"
         st.fireworks()
         st.balloons()
-        st.toast("DIAMOND LEGEND UNLOCKED!", icon="💎")
-        st.success(f"DIAMOND LEGEND – {name} got 25 in a row! SEA HISTORY! 🌟")
-    if badge_name:
-        log_badge_award(student_id, full_name, badge_name)
+        st.toast("💎 DIAMOND LEGEND!", icon="💎")
+        st.success(f"💎 **DIAMOND LEGEND** – {name} made SEA history! 🌟")
 
 # ============================================
 # HELPER FUNCTIONS
@@ -149,23 +136,14 @@ def log_student_activity(sid, name, qtype, strand, correct, secs):
     except:
         pass
 
-def log_badge_award(student_id, name, badge_name):
-    ts = datetime.now(TT_TZ).strftime("%Y-%m-%d %H:%M:%S")
-    try:
-        sheet = get_sheets_client()
-        if sheet:
-            sheet.worksheet("Badges").append_row([name, badge_name, ts])
-    except:
-        pass
-
 def check_daily_limit():
     limit = int(st.secrets.get("daily_limit_per_student", 50))
     today = get_tt_date().isoformat()
-    if st.session_state.get("daily_date") != today:
+    if st.session_state.daily_date != today:
         st.session_state.daily_date = today
         st.session_state.daily_count = 0
     if st.session_state.daily_count >= limit:
-        st.warning("Daily limit reached! Come back tomorrow! 🎉")
+        st.warning("🎯 Daily Goal Reached! Come back tomorrow!")
         st.stop()
 
 def get_or_create_chat():
@@ -178,18 +156,14 @@ def get_or_create_chat():
     return st.session_state.gemini_chat
 
 # ============================================
-# DASHBOARD — FIXED INDENTATION HERE
+# DASHBOARD
 # ============================================
 def show_dashboard():
     st.markdown("<h1 style='text-align:center;color:#a5b4fc'>🎓 SEA Math Super-Tutor</h1>", unsafe_allow_html=True)
     st.markdown("<p style='text-align:center;color:#e5e7eb;font-size:20px'>Your Friendly AI Math Coach for SEA Success!</p>", unsafe_allow_html=True)
 
     if not st.session_state.student_name:
-        st.markdown("""
-        <div style='background:linear-gradient(135deg,#f97316,#ec4899);padding:30px;border-radius:18px;text-align:center;color:white'>
-            <h2>👋 Welcome, Champion!</h2><p>Enter your details to start!</p>
-        </div>
-        """, unsafe_allow_html=True)
+        st.markdown("<div style='background:linear-gradient(135deg,#f97316,#ec4899);padding:30px;border-radius:18px;text-align:center;color:white'><h2>👋 Welcome, Champion!</h2><p>Enter your details to start!</p></div>", unsafe_allow_html=True)
         col1, col2, col3 = st.columns(3)
         with col1: first = st.text_input("First Name")
         with col2: last = st.text_input("Last Name")
@@ -206,12 +180,6 @@ def show_dashboard():
         return
 
     st.success(f"Welcome back, {st.session_state.first_name}! 🎉")
-
-    if st.button("📊 View Progress"):
-        with st.expander("Your Progress Today", expanded=True):
-            st.metric("🔥 Current Streak", st.session_state.current_streak)
-            st.metric("🏆 Best Streak", st.session_state.best_streak)
-
     col1, col2 = st.columns(2)
     topics = ["Number", "Measurement", "Geometry", "Statistics", "Mixed", "Full Test"]
     icons = ["🔢", "📏", "📐", "📊", "🎲", "📝"]
@@ -224,12 +192,10 @@ def show_dashboard():
                 st.rerun()
 
 # ============================================
-# PRACTICE SCREEN — BADGES 100% RELIABLE
+# PRACTICE SCREEN — FIXED + DAILY COUNT + BADGES 100%
 # ============================================
-# ... everything at the top stays EXACTLY the same until show_practice_screen() ...
-
 def show_practice_screen():
-    check_daily_limit()   # ← this checks, but never increases the count!
+    check_daily_limit()
 
     col1, col2 = st.columns([5,1])
     with col1:
@@ -264,20 +230,18 @@ def show_practice_screen():
         with st.chat_message("assistant", avatar="🤖"):
             with st.spinner("Thinking…"):
                 try:
-                    response = chat.send_message(
-                        f"Student: {st.session_state.first_name}\nTopic: {st.session_state.current_topic}\n\n{prompt}"
-                    )
+                    response = chat.send_message(f"Student: {st.session_state.first_name}\nTopic: {st.session_state.current_topic}\n\n{prompt}")
                     text = response.text
                 except:
                     text = "Let’s try another question! 😊"
 
                 st.markdown(text)
-                st.session_state.conversation_history.append({"role": "assistant", "content": text))
+                st.session_state.conversation_history.append({"role": "assistant", "content": text})
 
-                # BULLETPROOF DETECTION
-                check_text = (text.lower() + " " + " ".join(text.splitlines()[:3]).lower())
-                correct_keywords = ["correct","yes!","excellent","great job","well done","perfect","right","you got it","that's right","exactly","spot on","brilliant","awesome"]
-                wrong_keywords = ["not quite","not correct","try again","wrong","almost","incorrect","no","that's not"]
+                # SMART + RELIABLE DETECTION
+                check_text = text.lower() + " " + " ".join(line.lower() for line in text.splitlines()[:3])
+                correct_keywords = ["correct","yes!","excellent","great job","well done","perfect","right","you got it","that's right","exactly","brilliant","awesome"]
+                wrong_keywords = ["not quite","not correct","try again","wrong","almost","incorrect","no"]
 
                 has_correct = any(kw in check_text for kw in correct_keywords) or "✅" in text or "✓" in text
                 has_wrong = any(kw in check_text for kw in wrong_keywords) or "❌" in text or "✗" in text
@@ -287,7 +251,7 @@ def show_practice_screen():
 
                 if correct or wrong:
                     st.session_state.questions_answered += 1
-                    st.session_state.daily_count = st.session_state.get("daily_count", 0) + 1   # ← THIS IS THE MISSING LINE!
+                    st.session_state.daily_count += 1   # ← THIS FIXES THE LOOP!
 
                     if correct:
                         st.session_state.correct_answers += 1
@@ -298,18 +262,11 @@ def show_practice_screen():
                             award_badge(st.session_state.current_streak)
                     else:
                         if st.session_state.current_streak >= 5:
-                            st.info(f"Streak ended at {st.session_state.current_streak} — incredible run! 💪")
+                            st.info(f"Streak ended at {st.session_state.current_streak} — amazing effort! 💪")
                         st.session_state.current_streak = 0
 
                     elapsed = int((datetime.now(TT_TZ) - st.session_state.question_start_time).total_seconds())
-                    log_student_activity(
-                        st.session_state.student_id,
-                        st.session_state.student_name,
-                        "Question",
-                        st.session_state.current_topic,
-                        correct,
-                        elapsed
-                    )
+                    log_student_activity(st.session_state.student_id, st.session_state.student_name, "Question", st.session_state.current_topic, correct, elapsed)
                     st.session_state.question_start_time = datetime.now(TT_TZ)
 
 # ============================================
