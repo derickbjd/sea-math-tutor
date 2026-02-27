@@ -50,39 +50,39 @@ ROLE:
 YOU MUST NOT:
 - You MUST NOT award badges.
 - You MUST NOT calculate streaks.
-- You MUST NOT say “you got X correct so far.”
+- You MUST NOT say "you got X correct so far."
 - You MUST NOT invent badge names or achievements.
-- You MUST NOT reference progress (“You are doing well today because…”).
-- You MUST NOT show or mention “user:” or “assistant:” in any reply.
+- You MUST NOT reference progress ("You are doing well today because…").
+- You MUST NOT show or mention "user:" or "assistant:" in any reply.
 - You MUST NOT show the answer when asking a question.
 - You MUST NOT answer your own question.
-- You MUST wait for the student’s answer before giving feedback.
+- You MUST wait for the student's answer before giving feedback.
 Only the APP calculates correctness, streaks, progress, and badges — NOT YOU.
 ============================================================
 BADGE & STREAK PROTECTION (CRITICAL)
 ============================================================
 You MUST NOT:
 - Tell a student they earned a badge.
-- Mention streaks (“You have 4 in a row”).
-- Say “One more for the next badge.”
-- Say “You are close to a badge.”
+- Mention streaks ("You have 4 in a row").
+- Say "One more for the next badge."
+- Say "You are close to a badge."
 - Mention bronze, silver, gold, platinum, or any badge.
 - Congratulate based on progress — only on the SINGLE answer they just gave.
 ============================================================
 QUESTION BEHAVIOR
 ============================================================
 WHEN the student says:
-- “start”
-- “next”
-- “give me a question”
-- “another”
+- "start"
+- "next"
+- "give me a question"
+- "another"
 → Give ONE SEA-style question ONLY.
 When asking a question:
 1. Ask ONE question.
 2. NEVER include the answer.
 3. Keep language simple.
 4. End by stating:
-   “This is a [Number] question.”
+   "This is a [Number] question."
    OR Measurement / Geometry / Statistics
    (based on the topic given by the app)
 5. Do NOT explain anything yet.
@@ -91,26 +91,26 @@ ANSWER FEEDBACK BEHAVIOR
 ============================================================
 When the student gives an answer:
 FIRST LINE IF CORRECT:
-- “✅ Correct!”
-- “🎉 Yes! Correct!”
-- “✓ Right!”
-- “Excellent work!”
-- “You got it!”
+- "✅ Correct!"
+- "🎉 Yes! Correct!"
+- "✓ Right!"
+- "Excellent work!"
+- "You got it!"
 FIRST LINE IF WRONG:
-- “❌ Not quite.”
-- “That's not correct.”
-- “Good try, but not correct.”
-- “Almost, but not quite.”
+- "❌ Not quite."
+- "That's not correct."
+- "Good try, but not correct."
+- "Almost, but not quite."
 Then:
 - Give a short explanation (2–3 sentences maximum).
 - Teach a helpful trick or shortcut.
-- Ask “Want another question?”
+- Ask "Want another question?"
 Do NOT:
 - Reference streaks
 - Mention badges
 - Mention progress
 - Compare to earlier questions
-- Say “Four in a row!” or any number
+- Say "Four in a row!" or any number
 ============================================================
 TOPICS & CONTENT
 ============================================================
@@ -126,7 +126,7 @@ FORMAT SUMMARY
 ============================================================
 WHEN ASKING A QUESTION:
 - ONE question only.
-- End with “This is a [Topic] question.”
+- End with "This is a [Topic] question."
 WHEN RESPONDING TO AN ANSWER:
 1. Correct/Not Correct marker
 2. Short explanation
@@ -138,7 +138,7 @@ NEVER:
 - Mention progress
 - Predict or guess correctness history
 - Pretend to be the student
-- Use “user:” or “assistant:”
+- Use "user:" or "assistant:"
 YOUR ROLE:
 - IMPORTANT: NEVER use LaTeX, never use backslashes, never wrap anything in $…$, and never write equations like \frac or \mathbf. Only write plain English text and plain numbers.
 - Create SEA-standard questions based on the official SEA framework.
@@ -165,9 +165,10 @@ You MUST follow these rules:
 At the end of each question you MUST clearly say:
 - "This is a [Number] question." etc.
 CRITICAL - ANSWER FEEDBACK FORMAT:
-When student answers, you MUST start your response with one of these:
+When student answers, you MUST start your response with one of these EXACT markers:
 - If CORRECT: Start with "✅ Correct!" or "🎉 Yes!" or "✓ Right!" or "Excellent!"
-- If WRONG: Start with "❌ Not quite" or "That's not correct" or "Try again"
+- If WRONG: Start with "❌ Not quite" or "❌ That's not correct" or "❌ Try again"
+The ✅ or ❌ emoji MUST be the very first character of your response when giving feedback.
 This is VERY IMPORTANT for tracking their progress!
 You are helping them become math champions! 🏆
 """
@@ -294,9 +295,11 @@ st.session_state.setdefault("current_streak", 0)
 st.session_state.setdefault("best_streak", 0)
 st.session_state.setdefault("conversation_history", [])
 st.session_state.setdefault("question_start_time", datetime.now(TT_TZ))
+st.session_state.setdefault("daily_date", None)   # FIX 4: initialise daily tracking
+st.session_state.setdefault("daily_count", 0)      # FIX 4: initialise daily count
 
 # ============================================
-# BADGE SYSTEM (now logs to Sheets)
+# BADGE SYSTEM
 # ============================================
 def award_badge(streak):
     name = st.session_state.first_name.split()[0] if st.session_state.first_name else "Champion"
@@ -322,12 +325,15 @@ def award_badge(streak):
 
     elif streak == 20:
         badge_name = "PLATINUM CROWN"
-        st.fireworks()
+        # FIX 1: st.fireworks() does not exist — replaced with st.snow() + st.balloons()
+        st.snow()
+        st.balloons()
         st.success(f"👑 **PLATINUM CROWN** – {name} reaches 20! You're royalty! 👑")
 
     elif streak == 25:
         badge_name = "DIAMOND LEGEND"
-        st.fireworks()
+        # FIX 1: st.fireworks() does not exist — replaced with st.snow() + st.balloons()
+        st.snow()
         st.balloons()
         st.toast("💎 DIAMOND LEGEND UNLOCKED!", icon="💎")
         st.success(f"💎 **DIAMOND LEGEND** – {name} got 25 in a row! SEA HISTORY! 🌟")
@@ -339,17 +345,31 @@ def award_badge(streak):
 # HELPER FUNCTIONS
 # ============================================
 def get_or_create_student_id(name):
-    base = f"STU{abs(hash(name))}"[:10]
+    """
+    FIX 2: Now correctly creates a new Sheets row for first-time students
+    instead of silently returning a hash-only ID with no record.
+    """
+    base_id = f"STU{abs(hash(name))}"[:10]
     try:
         sheet = get_sheets_client()
-        if sheet:
-            students = sheet.worksheet("Students").col_values(2)
-            for i, n in enumerate(students, 1):
-                if n.strip().lower() == name.strip().lower():
-                    return sheet.worksheet("Students").cell(i, 1).value or base
-        return base
-    except:
-        return base
+        if not sheet:
+            return base_id
+
+        ws = sheet.worksheet("Students")
+        names_col = ws.col_values(2)  # column B = full names
+
+        for i, n in enumerate(names_col, 1):
+            if n.strip().lower() == name.strip().lower():
+                existing_id = ws.cell(i, 1).value
+                return existing_id if existing_id else base_id
+
+        # Student not found — create a new row
+        ts = datetime.now(TT_TZ).strftime("%Y-%m-%d %H:%M:%S")
+        ws.append_row([base_id, name, ts])
+        return base_id
+
+    except Exception:
+        return base_id
 
 def log_student_activity(sid, name, qtype, strand, correct, secs):
     ts = datetime.now(TT_TZ).strftime("%Y-%m-%d %H:%M:%S")
@@ -363,7 +383,6 @@ def log_student_activity(sid, name, qtype, strand, correct, secs):
         pass
 
 def log_badge_award(student_id, name, badge_name):
-    """Write a badge award to the Badges sheet so teachers can see it."""
     ts = datetime.now(TT_TZ).strftime("%Y-%m-%d %H:%M:%S")
     try:
         sheet = get_sheets_client()
@@ -376,6 +395,7 @@ def log_badge_award(student_id, name, badge_name):
 def check_daily_limit():
     limit = int(st.secrets.get("daily_limit_per_student", 50))
     today = get_tt_date().isoformat()
+    # FIX 4: reset counter when the date changes
     if st.session_state.get("daily_date") != today:
         st.session_state.daily_date = today
         st.session_state.daily_count = 0
@@ -391,6 +411,43 @@ def get_or_create_chat():
             {"role": "model", "parts": ["Understood!"]}
         ])
     return st.session_state.gemini_chat
+
+# ============================================
+# FIX 3: Robust correctness detection
+# Uses the ✅ / ❌ emoji markers the system
+# prompt instructs Gemini to always lead with,
+# rather than fragile keyword scanning that
+# could misfire on phrases like "Not correct".
+# ============================================
+def detect_correctness(text: str):
+    """
+    Returns (is_answer_feedback, is_correct).
+    Checks for the leading emoji markers that the system prompt mandates.
+    Falls back to keyword scanning only as a safety net.
+    """
+    first_line = text.splitlines()[0].strip() if text else ""
+
+    # Primary check: emoji markers (reliable, unambiguous)
+    if first_line.startswith("✅") or first_line.startswith("✓") or first_line.startswith("🎉"):
+        return True, True
+    if first_line.startswith("❌"):
+        return True, False
+
+    # Fallback: keyword scan (kept as safety net but scoped tightly)
+    lower = first_line.lower()
+    CORRECT_WORDS   = ["✅ correct", "✓ right", "excellent work", "you got it", "🎉 yes"]
+    INCORRECT_WORDS = ["❌ not quite", "❌ that's not correct", "❌ try again",
+                       "not quite", "that's not correct", "good try, but not correct",
+                       "almost, but not quite"]
+
+    for phrase in CORRECT_WORDS:
+        if phrase in lower:
+            return True, True
+    for phrase in INCORRECT_WORDS:
+        if phrase in lower:
+            return True, False
+
+    return False, False   # Not a feedback message (e.g. a new question)
 
 # ============================================
 # DASHBOARD
@@ -484,23 +541,24 @@ def show_practice_screen():
                     )
                     text = response.text
                 except:
-                    text = "Let’s try another question! 😊"
+                    text = "Let's try another question! 😊"
 
                 st.markdown(text)
                 st.session_state.conversation_history.append({"role": "assistant", "content": text})
 
-                first = text.splitlines()[0].strip().lower()
-                correct = any(x in first for x in ["correct","yes!","excellent","great job","well done","perfect","right","you got it"])
-                wrong = any(x in first for x in ["not quite","not correct","try again","wrong","almost"])
+                # FIX 3: Use emoji-based detection instead of fragile keyword scan
+                is_feedback, correct = detect_correctness(text)
 
-                if correct or wrong:
+                if is_feedback:
                     st.session_state.questions_answered += 1
+                    st.session_state.daily_count += 1   # FIX 4: increment daily counter
+
                     if correct:
                         st.session_state.correct_answers += 1
                         st.session_state.current_streak += 1
                         if st.session_state.current_streak > st.session_state.best_streak:
                             st.session_state.best_streak = st.session_state.current_streak
-                        if st.session_state.current_streak in [5,10,15,20,25]:
+                        if st.session_state.current_streak in [5, 10, 15, 20, 25]:
                             award_badge(st.session_state.current_streak)
                     else:
                         if st.session_state.current_streak >= 5:
