@@ -20,7 +20,7 @@ def get_gemini_model():
     genai.configure(api_key=st.secrets["google_api_key"])
     return genai.GenerativeModel(
         "models/gemini-flash-latest",
-        generation_config={"temperature": 0.7, "max_output_tokens": 500, "top_p": 0.8}
+        generation_config={"temperature": 0.7, "max_output_tokens": 1024, "top_p": 0.8}
     )
 
 @st.cache_resource
