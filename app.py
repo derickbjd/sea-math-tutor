@@ -21,8 +21,8 @@ def now_ts():
 # ============================================
 # CONFIG
 # ============================================
-GEMINI_MODEL_ID = "models/gemini-flash-latest"
-MAX_OUTPUT_TOKENS = 500
+GEMINI_MODEL_ID = "gemini-2.0-flash"
+MAX_OUTPUT_TOKENS = 1024
 
 # Free tier stability controls
 MIN_SECONDS_BETWEEN_CALLS = 2  # debounce per session
@@ -296,7 +296,6 @@ def is_rate_limited(err_text: str) -> bool:
 # SHEETS + BADGES
 # ============================================
 def get_or_create_student_id(name: str):
-    # Note: Python hash is not stable across restarts. Keeping it for now as you had it.
     base_id = f"STU{abs(hash(name))}"[:10]
     try:
         sheet = get_sheets_client()
@@ -384,11 +383,29 @@ def check_daily_limit():
 # DETECT CORRECTNESS
 # ============================================
 def detect_correctness(text: str):
+    """
+    Primary check: leading emoji (✅ ✓ 🎉 = correct, ❌ = wrong).
+    Fallback: phrase scan for safety in case Gemini omits the emoji.
+    """
     first_line = text.splitlines()[0].strip() if text else ""
-    if first_line.startswith("✅"):
+
+    # Primary: emoji markers
+    if first_line.startswith("✅") or first_line.startswith("✓") or first_line.startswith("🎉"):
         return True, True
     if first_line.startswith("❌"):
         return True, False
+
+    # Fallback: phrase scan (safety net only)
+    lower = first_line.lower()
+    CORRECT_PHRASES = ["correct", "right!", "excellent", "well done", "you got it"]
+    WRONG_PHRASES   = ["not quite", "that's not correct", "try again", "good try, but"]
+    for p in CORRECT_PHRASES:
+        if lower.startswith(p):
+            return True, True
+    for p in WRONG_PHRASES:
+        if lower.startswith(p):
+            return True, False
+
     return False, False
 
 # ============================================
@@ -399,12 +416,10 @@ def build_payload(student_text: str) -> str:
     first_name = st.session_state.first_name or "Student"
     last_q = st.session_state.last_question_text
 
-    # Determine whether this is likely a request for a new question
     normalized = (student_text or "").strip().lower()
     is_request = normalized in {"start", "next", "another", "give me a question"}
 
     if is_request:
-        # Ask for a new question
         return (
             f"{SYSTEM_PROMPT}\n\n"
             "TASK: ASK_ONE_QUESTION\n"
@@ -413,9 +428,7 @@ def build_payload(student_text: str) -> str:
             "Student said they want a question. Give ONE question only.\n"
         )
 
-    # Otherwise treat as an answer submission. Include last question.
     if not last_q:
-        # If for some reason we do not have a last question, instruct the model to ask one.
         return (
             f"{SYSTEM_PROMPT}\n\n"
             "TASK: ASK_ONE_QUESTION\n"
@@ -459,8 +472,9 @@ def safe_generate(student_text: str) -> str:
         model = get_gemini_model()
         payload = build_payload(student_text)
 
-        last_err = None
+        # Single attempt on free tier (RETRY_ON_FAIL=1 enables one retry)
         attempts = 1 + max(0, int(RETRY_ON_FAIL))
+        last_err = None
 
         for attempt in range(attempts):
             try:
@@ -477,14 +491,14 @@ def safe_generate(student_text: str) -> str:
                     st.session_state.cooldown_until = time.time() + wait_s
                     raise RuntimeError(f"RATE_LIMIT:{wait_s}")
                 if attempt < attempts - 1:
-                    time.sleep(0.6)
+                    time.sleep(1.0)
                     continue
-                raise last_err
+        raise last_err
     finally:
         st.session_state.is_generating = False
+        st.session_state.last_request_time = time.time()  # FIX 5: update debounce timer
 
 def update_last_question_if_needed(assistant_text: str):
-    # If response is not feedback (no ✅ or ❌), treat it as a new question
     is_feedback, _ = detect_correctness(assistant_text)
     if not is_feedback and assistant_text and assistant_text.strip():
         st.session_state.last_question_text = assistant_text.strip()
@@ -584,7 +598,6 @@ def show_practice_screen():
             st.session_state.screen = "dashboard"
             st.rerun()
 
-    # Cooldown countdown banner for students
     cd = st.session_state.get("cooldown_until", 0.0)
     now = time.time()
     if cd and now < cd:
@@ -614,7 +627,6 @@ def show_practice_screen():
     if not prompt:
         return
 
-    # Record user message
     st.session_state.conversation_history.append({"role": "user", "content": prompt})
     with st.chat_message("user", avatar="👤"):
         st.markdown(prompt)
@@ -634,21 +646,19 @@ def show_practice_screen():
                     remaining = msg.split(":")[1]
                     text = f"Please wait {remaining} seconds, then type Next. 😊"
                 elif msg == "TOO_FAST":
-                    text = "Let’s go one step at a time 😊"
+                    text = "Let's go one step at a time 😊"
                 elif msg == "ALREADY_GENERATING":
                     text = "One moment please 😊"
                 else:
-                    text = "I had a small connection problem. Please type Next once. 😊"
+                    text = f"Connection problem: {repr(e)} — please type Next to try again."
 
             st.markdown(text)
             st.session_state.conversation_history.append({"role": "assistant", "content": text})
 
-            # Update last question if this was a question
             update_last_question_if_needed(text)
 
             is_feedback, correct = detect_correctness(text)
 
-            # Start timing when the assistant asks a question
             if not is_feedback:
                 st.session_state.question_start_time = datetime.now(TT_TZ)
 
