@@ -25,7 +25,8 @@ GEMINI_MODEL_ID = "models/gemini-flash-latest"
 MAX_OUTPUT_TOKENS = 500
 
 # Free tier stability controls
-MIN_SECONDS_BETWEEN_CALLS = 2  # debounce
+MIN_SECONDS_BETWEEN_CALLS = 2  # debounce per session
+RETRY_ON_FAIL = 0              # keep 0 on free tier to avoid doubling traffic
 
 # ============================================
 # CACHED RESOURCES
@@ -33,6 +34,7 @@ MIN_SECONDS_BETWEEN_CALLS = 2  # debounce
 @st.cache_resource
 def get_gemini_model():
     genai.configure(api_key=st.secrets["google_api_key"])
+    # Stateless model calls. Prompt is provided in each request for reliability.
     return genai.GenerativeModel(
         GEMINI_MODEL_ID,
         generation_config={
@@ -102,7 +104,7 @@ When asking a question:
 1. Ask ONE question.
 2. NEVER include the answer.
 3. Keep language simple.
-4. End by stating:
+4. End by stating exactly:
    "This is a [Number] question."
    OR Measurement / Geometry / Statistics
    based on the topic given by the app.
@@ -260,34 +262,50 @@ st.session_state.setdefault("question_start_time", datetime.now(TT_TZ))
 st.session_state.setdefault("daily_date", None)
 st.session_state.setdefault("daily_count", 0)
 
+# Generation + debug + rate controls
 st.session_state.setdefault("is_generating", False)
 st.session_state.setdefault("last_gemini_error", None)
-
-# Rate limit controls
 st.session_state.setdefault("cooldown_until", 0.0)
 st.session_state.setdefault("last_request_time", 0.0)
 
-# ============================================
-# HELPERS
-# ============================================
-def check_daily_limit():
-    limit = int(st.secrets.get("daily_limit_per_student", 50))
-    today = get_tt_date().isoformat()
-    if st.session_state.get("daily_date") != today:
-        st.session_state.daily_date = today
-        st.session_state.daily_count = 0
-    if st.session_state.daily_count >= limit:
-        st.warning("Daily limit reached! Come back tomorrow! 🎉")
-        st.stop()
+# Stateless support
+st.session_state.setdefault("last_question_text", None)
 
+def show_debug_enabled():
+    return str(st.secrets.get("show_debug", "false")).lower() == "true"
+
+# ============================================
+# RATE LIMIT HELPERS
+# ============================================
+def parse_retry_seconds(err_text: str) -> int:
+    m = re.search(r"retry in\s+([\d.]+)s", err_text, re.IGNORECASE)
+    if not m:
+        return 30
+    return max(1, int(float(m.group(1)) + 1))
+
+def is_rate_limited(err_text: str) -> bool:
+    t = err_text.lower()
+    return (
+        "resourceexhausted" in t
+        or "quota exceeded" in t
+        or "rate limit" in t
+        or "429" in t
+    )
+
+# ============================================
+# SHEETS + BADGES
+# ============================================
 def get_or_create_student_id(name: str):
+    # Note: Python hash is not stable across restarts. Keeping it for now as you had it.
     base_id = f"STU{abs(hash(name))}"[:10]
     try:
         sheet = get_sheets_client()
         if not sheet:
             return base_id
+
         ws = sheet.worksheet("Students")
-        names_col = ws.col_values(2)
+        names_col = ws.col_values(2)  # column B
+
         for i, n in enumerate(names_col, 1):
             if n.strip().lower() == name.strip().lower():
                 existing_id = ws.cell(i, 1).value
@@ -349,6 +367,22 @@ def award_badge(streak):
     if badge_name:
         log_badge_award(student_id, full_name, badge_name)
 
+# ============================================
+# DAILY LIMIT
+# ============================================
+def check_daily_limit():
+    limit = int(st.secrets.get("daily_limit_per_student", 50))
+    today = get_tt_date().isoformat()
+    if st.session_state.get("daily_date") != today:
+        st.session_state.daily_date = today
+        st.session_state.daily_count = 0
+    if st.session_state.daily_count >= limit:
+        st.warning("Daily limit reached! Come back tomorrow! 🎉")
+        st.stop()
+
+# ============================================
+# DETECT CORRECTNESS
+# ============================================
 def detect_correctness(text: str):
     first_line = text.splitlines()[0].strip() if text else ""
     if first_line.startswith("✅"):
@@ -357,34 +391,53 @@ def detect_correctness(text: str):
         return True, False
     return False, False
 
-def init_gemini_chat():
-    model = get_gemini_model()
-    return model.start_chat(history=[
-        {"role": "user", "parts": [SYSTEM_PROMPT]},
-        {"role": "model", "parts": ["Understood."]},
-    ])
+# ============================================
+# STATELESS GEMINI CALL
+# ============================================
+def build_payload(student_text: str) -> str:
+    topic = st.session_state.current_topic
+    first_name = st.session_state.first_name or "Student"
+    last_q = st.session_state.last_question_text
 
-def get_or_create_chat():
-    if "gemini_chat" not in st.session_state:
-        st.session_state.gemini_chat = init_gemini_chat()
-    return st.session_state.gemini_chat
+    # Determine whether this is likely a request for a new question
+    normalized = (student_text or "").strip().lower()
+    is_request = normalized in {"start", "next", "another", "give me a question"}
 
-def parse_retry_seconds(err_text: str) -> int:
-    m = re.search(r"retry in\s+([\d.]+)s", err_text, re.IGNORECASE)
-    if not m:
-        return 30
-    return max(1, int(float(m.group(1)) + 1))
+    if is_request:
+        # Ask for a new question
+        return (
+            f"{SYSTEM_PROMPT}\n\n"
+            "TASK: ASK_ONE_QUESTION\n"
+            f"Topic: {topic}\n"
+            f"Student first name: {first_name}\n\n"
+            "Student said they want a question. Give ONE question only.\n"
+        )
 
-def is_rate_limited(err_text: str) -> bool:
-    t = err_text.lower()
+    # Otherwise treat as an answer submission. Include last question.
+    if not last_q:
+        # If for some reason we do not have a last question, instruct the model to ask one.
+        return (
+            f"{SYSTEM_PROMPT}\n\n"
+            "TASK: ASK_ONE_QUESTION\n"
+            f"Topic: {topic}\n"
+            f"Student first name: {first_name}\n\n"
+            "No previous question is available. Ask ONE question only.\n"
+        )
+
     return (
-        "resourceexhausted" in t
-        or "quota exceeded" in t
-        or "rate limit" in t
-        or "429" in t
+        f"{SYSTEM_PROMPT}\n\n"
+        "TASK: GRADE_STUDENT_ANSWER\n"
+        f"Topic: {topic}\n"
+        f"Student first name: {first_name}\n\n"
+        "Previous question:\n"
+        f"{last_q}\n\n"
+        "Student answer:\n"
+        f"{student_text}\n\n"
+        "Rules: Start with ✅ if correct or ❌ if wrong. Then explain briefly.\n"
+        "Do NOT ask a new question in this grading response.\n"
     )
 
-def safe_send_to_gemini(student_text: str):
+def safe_generate(student_text: str) -> str:
     now = time.time()
 
     # Cooldown gate
@@ -396,32 +449,45 @@ def safe_send_to_gemini(student_text: str):
     if now - st.session_state.last_request_time < MIN_SECONDS_BETWEEN_CALLS:
         raise RuntimeError("TOO_FAST")
 
-    st.session_state.last_request_time = now
+    if st.session_state.is_generating:
+        raise RuntimeError("ALREADY_GENERATING")
 
-    chat = get_or_create_chat()
-
-    payload = (
-        "Follow the system rules exactly. Do not mention badges, streaks, or progress.\n\n"
-        f"Topic: {st.session_state.current_topic}\n"
-        f"Student first name: {st.session_state.first_name}\n\n"
-        "STUDENT_MESSAGE_BEGIN\n"
-        f"{student_text}\n"
-        "STUDENT_MESSAGE_END"
-    )
+    st.session_state.is_generating = True
+    st.session_state.last_gemini_error = None
 
     try:
-        resp = chat.send_message(payload)
-        text = getattr(resp, "text", None)
-        if text and text.strip():
-            return text.strip()
-        raise RuntimeError("EMPTY_RESPONSE")
-    except Exception as e:
-        err_text = repr(e)
-        if is_rate_limited(err_text):
-            wait_s = parse_retry_seconds(err_text)
-            st.session_state.cooldown_until = time.time() + wait_s
-            raise RuntimeError(f"RATE_LIMIT:{wait_s}")
-        raise
+        model = get_gemini_model()
+        payload = build_payload(student_text)
+
+        last_err = None
+        attempts = 1 + max(0, int(RETRY_ON_FAIL))
+
+        for attempt in range(attempts):
+            try:
+                resp = model.generate_content(payload)
+                text = getattr(resp, "text", None)
+                if text and text.strip():
+                    return text.strip()
+                raise RuntimeError("EMPTY_RESPONSE")
+            except Exception as e:
+                last_err = e
+                err_text = repr(e)
+                if is_rate_limited(err_text):
+                    wait_s = parse_retry_seconds(err_text)
+                    st.session_state.cooldown_until = time.time() + wait_s
+                    raise RuntimeError(f"RATE_LIMIT:{wait_s}")
+                if attempt < attempts - 1:
+                    time.sleep(0.6)
+                    continue
+                raise last_err
+    finally:
+        st.session_state.is_generating = False
+
+def update_last_question_if_needed(assistant_text: str):
+    # If response is not feedback (no ✅ or ❌), treat it as a new question
+    is_feedback, _ = detect_correctness(assistant_text)
+    if not is_feedback and assistant_text and assistant_text.strip():
+        st.session_state.last_question_text = assistant_text.strip()
 
 # ============================================
 # UI SCREENS
@@ -433,13 +499,15 @@ def show_dashboard():
         unsafe_allow_html=True
     )
 
-    with st.expander("Developer Debug", expanded=False):
-        st.write("Model:", GEMINI_MODEL_ID)
-        if st.session_state.get("last_gemini_error"):
-            st.code(st.session_state["last_gemini_error"])
-        cd = st.session_state.get("cooldown_until", 0.0)
-        if cd and time.time() < cd:
-            st.write("Cooldown remaining (s):", int(cd - time.time()))
+    if show_debug_enabled():
+        with st.expander("Developer Debug", expanded=False):
+            st.write("Model:", GEMINI_MODEL_ID)
+            if st.session_state.get("last_gemini_error"):
+                st.code(st.session_state["last_gemini_error"])
+            cd = st.session_state.get("cooldown_until", 0.0)
+            if cd and time.time() < cd:
+                st.write("Cooldown remaining (s):", int(cd - time.time()))
+            st.write("Last question stored:", bool(st.session_state.get("last_question_text")))
 
     if not st.session_state.student_name:
         st.markdown(
@@ -462,6 +530,7 @@ def show_dashboard():
 
         if st.button("✅ Enter"):
             allowed_codes = st.secrets.get("class_codes", "MATH2025").split(",")
+            allowed_codes = [c.strip() for c in allowed_codes if c.strip()]
             if first and last and code in allowed_codes:
                 name = f"{first} {last}"
                 st.session_state.student_name = name
@@ -482,33 +551,44 @@ def show_dashboard():
     col1, col2 = st.columns(2)
     topics = ["Number", "Measurement", "Geometry", "Statistics", "Mixed", "Full Test"]
     icons = ["🔢", "📏", "📐", "📊", "🎲", "📝"]
+
     for i, topic in enumerate(topics):
         with col1 if i % 2 == 0 else col2:
             if st.button(f"{icons[i]} {topic}", use_container_width=True):
                 st.session_state.current_topic = topic
                 st.session_state.screen = "practice"
                 st.session_state.conversation_history = []
-                st.session_state.gemini_chat = init_gemini_chat()
+                st.session_state.last_question_text = None
+                st.session_state.last_gemini_error = None
+                st.session_state.cooldown_until = 0.0
+                st.session_state.last_request_time = 0.0
                 st.rerun()
 
 def show_practice_screen():
     check_daily_limit()
 
+    icons = {
+        "Number": "🔢",
+        "Measurement": "📏",
+        "Geometry": "📐",
+        "Statistics": "📊",
+        "Mixed": "🎲",
+        "Full Test": "📝"
+    }
+
     col1, col2 = st.columns([5, 1])
     with col1:
-        icons = {
-            "Number": "🔢",
-            "Measurement": "📏",
-            "Geometry": "📐",
-            "Statistics": "📊",
-            "Mixed": "🎲",
-            "Full Test": "📝"
-        }
         st.title(f"{icons[st.session_state.current_topic]} {st.session_state.current_topic} Practice")
     with col2:
         if st.button("🚪 Exit"):
             st.session_state.screen = "dashboard"
             st.rerun()
+
+    # Cooldown countdown banner for students
+    cd = st.session_state.get("cooldown_until", 0.0)
+    now = time.time()
+    if cd and now < cd:
+        st.info(f"Quick break: {int(cd - now)} seconds left 😊")
 
     c1, c2, c3, c4 = st.columns(4)
     with c1:
@@ -531,62 +611,71 @@ def show_practice_screen():
         st.info(f"👋 Hi {st.session_state.first_name}! Type **Start** to begin!")
 
     prompt = st.chat_input("Type your answer or say 'Next'...")
-    if prompt:
-        st.session_state.conversation_history.append({"role": "user", "content": prompt})
-        with st.chat_message("user", avatar="👤"):
-            st.markdown(prompt)
+    if not prompt:
+        return
 
-        with st.chat_message("assistant", avatar="🤖"):
-            with st.spinner("Thinking..."):
-                try:
-                    text = safe_send_to_gemini(prompt)
-                except Exception as e:
-                    st.session_state.last_gemini_error = repr(e)
-                    msg = str(e)
+    # Record user message
+    st.session_state.conversation_history.append({"role": "user", "content": prompt})
+    with st.chat_message("user", avatar="👤"):
+        st.markdown(prompt)
 
-                    if msg.startswith("RATE_LIMIT:"):
-                        wait_s = msg.split(":")[1]
-                        text = f"Quick break. Please wait about {wait_s} seconds, then type Next. 😊"
-                    elif msg.startswith("COOLDOWN_ACTIVE:"):
-                        remaining = msg.split(":")[1]
-                        text = f"Please wait {remaining} seconds, then type Next. 😊"
-                    elif msg == "TOO_FAST":
-                        text = "Let’s go one step at a time 😊"
-                    else:
-                        text = "I had a small connection problem. Please type Next once. 😊"
+    with st.chat_message("assistant", avatar="🤖"):
+        with st.spinner("Thinking..."):
+            try:
+                text = safe_generate(prompt)
+            except Exception as e:
+                st.session_state.last_gemini_error = repr(e)
+                msg = str(e)
 
-                st.markdown(text)
-                st.session_state.conversation_history.append({"role": "assistant", "content": text})
+                if msg.startswith("RATE_LIMIT:"):
+                    wait_s = msg.split(":")[1]
+                    text = f"Quick break. Please wait about {wait_s} seconds, then type Next. 😊"
+                elif msg.startswith("COOLDOWN_ACTIVE:"):
+                    remaining = msg.split(":")[1]
+                    text = f"Please wait {remaining} seconds, then type Next. 😊"
+                elif msg == "TOO_FAST":
+                    text = "Let’s go one step at a time 😊"
+                elif msg == "ALREADY_GENERATING":
+                    text = "One moment please 😊"
+                else:
+                    text = "I had a small connection problem. Please type Next once. 😊"
 
-                is_feedback, correct = detect_correctness(text)
+            st.markdown(text)
+            st.session_state.conversation_history.append({"role": "assistant", "content": text})
 
-                if not is_feedback:
-                    st.session_state.question_start_time = datetime.now(TT_TZ)
+            # Update last question if this was a question
+            update_last_question_if_needed(text)
 
-                if is_feedback:
-                    st.session_state.questions_answered += 1
-                    st.session_state.daily_count += 1
+            is_feedback, correct = detect_correctness(text)
 
-                    if correct:
-                        st.session_state.correct_answers += 1
-                        st.session_state.current_streak += 1
-                        st.session_state.best_streak = max(st.session_state.best_streak, st.session_state.current_streak)
-                        if st.session_state.current_streak in [5, 10, 15, 20, 25]:
-                            award_badge(st.session_state.current_streak)
-                    else:
-                        if st.session_state.current_streak >= 5:
-                            st.info(f"Streak ended at {st.session_state.current_streak}. Great job!")
-                        st.session_state.current_streak = 0
+            # Start timing when the assistant asks a question
+            if not is_feedback:
+                st.session_state.question_start_time = datetime.now(TT_TZ)
 
-                    elapsed = int((datetime.now(TT_TZ) - st.session_state.question_start_time).total_seconds())
-                    log_student_activity(
-                        st.session_state.student_id,
-                        st.session_state.student_name,
-                        "Question",
-                        st.session_state.current_topic,
-                        correct,
-                        elapsed
-                    )
+            if is_feedback:
+                st.session_state.questions_answered += 1
+                st.session_state.daily_count += 1
+
+                if correct:
+                    st.session_state.correct_answers += 1
+                    st.session_state.current_streak += 1
+                    st.session_state.best_streak = max(st.session_state.best_streak, st.session_state.current_streak)
+                    if st.session_state.current_streak in [5, 10, 15, 20, 25]:
+                        award_badge(st.session_state.current_streak)
+                else:
+                    if st.session_state.current_streak >= 5:
+                        st.info(f"Streak ended at {st.session_state.current_streak}. Great job!")
+                    st.session_state.current_streak = 0
+
+                elapsed = int((datetime.now(TT_TZ) - st.session_state.question_start_time).total_seconds())
+                log_student_activity(
+                    st.session_state.student_id,
+                    st.session_state.student_name,
+                    "Question",
+                    st.session_state.current_topic,
+                    correct,
+                    elapsed
+                )
 
 # ============================================
 # MAIN
