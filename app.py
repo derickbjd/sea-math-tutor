@@ -37,6 +37,7 @@ def get_gemini_model():
     # Stateless model calls. Prompt is provided in each request for reliability.
     return genai.GenerativeModel(
         GEMINI_MODEL_ID,
+        system_instruction=SYSTEM_PROMPT,
         generation_config={
             "temperature": 0.7,
             "max_output_tokens": MAX_OUTPUT_TOKENS,
@@ -412,6 +413,10 @@ def detect_correctness(text: str):
 # STATELESS GEMINI CALL
 # ============================================
 def build_payload(student_text: str) -> str:
+    """
+    Builds a compact payload. System prompt is passed once via system_instruction
+    at model init — NOT repeated here, which would burn free-tier token quota fast.
+    """
     topic = st.session_state.current_topic
     first_name = st.session_state.first_name or "Student"
     last_q = st.session_state.last_question_text
@@ -421,33 +426,28 @@ def build_payload(student_text: str) -> str:
 
     if is_request:
         return (
-            f"{SYSTEM_PROMPT}\n\n"
-            "TASK: ASK_ONE_QUESTION\n"
+            f"TASK: ASK_ONE_QUESTION\n"
             f"Topic: {topic}\n"
-            f"Student first name: {first_name}\n\n"
-            "Student said they want a question. Give ONE question only.\n"
+            f"Student first name: {first_name}\n"
+            f"Give ONE question only. End with: This is a {topic} question."
         )
 
     if not last_q:
         return (
-            f"{SYSTEM_PROMPT}\n\n"
-            "TASK: ASK_ONE_QUESTION\n"
+            f"TASK: ASK_ONE_QUESTION\n"
             f"Topic: {topic}\n"
-            f"Student first name: {first_name}\n\n"
-            "No previous question is available. Ask ONE question only.\n"
+            f"Student first name: {first_name}\n"
+            f"No previous question available. Ask ONE question only. End with: This is a {topic} question."
         )
 
     return (
-        f"{SYSTEM_PROMPT}\n\n"
-        "TASK: GRADE_STUDENT_ANSWER\n"
+        f"TASK: GRADE_STUDENT_ANSWER\n"
         f"Topic: {topic}\n"
-        f"Student first name: {first_name}\n\n"
-        "Previous question:\n"
-        f"{last_q}\n\n"
-        "Student answer:\n"
-        f"{student_text}\n\n"
-        "Rules: Start with ✅ if correct or ❌ if wrong. Then explain briefly.\n"
-        "Do NOT ask a new question in this grading response.\n"
+        f"Student first name: {first_name}\n"
+        f"Previous question: {last_q}\n"
+        f"Student answer: {student_text}\n"
+        f"Start with ✅ if correct or ❌ if wrong. Explain briefly in 2-3 sentences. "
+        f"Do NOT ask a new question."
     )
 
 def safe_generate(student_text: str) -> str:
